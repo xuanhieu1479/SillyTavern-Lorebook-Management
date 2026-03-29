@@ -1,0 +1,469 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { Entry, Category } from "./types";
+import type { ImportResult } from "./store";
+import {
+  loadEntries, saveEntries,
+  loadCategories, saveCategories,
+  importFromFile,
+} from "./store";
+import { saveCategoryFile, deleteCategoryFile, renameCategoryFile, loadAllFromDisk, loadSettings, setExportTemplate, createSnapshot, restoreSnapshot, getCurrentSnapshot, restoreRawSnapshot, savePreviousSnapshot, loadPreviousSnapshot, clearPreviousSnapshot } from "./api";
+import EntryForm from "./EntryForm";
+import type { EntryFormHandle } from "./EntryForm";
+import EntryList from "./EntryList";
+import CategoryManager from "./CategoryManager";
+import SettingsModal, { formatClipboard } from "./SettingsModal";
+import ExportModal from "./ExportModal";
+import RestoreModal from "./RestoreModal";
+import "./App.css";
+
+function generateId(): string {
+  return crypto.randomUUID();
+}
+
+export default function App() {
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("");
+  const [editing, setEditing] = useState<Entry | null>(null);
+  const [catError, setCatError] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [showRestore, setShowRestore] = useState(false);
+  const [clipboardTemplate, setClipboardTemplate] = useState("{{content}}");
+  const [exportTemplate, setExportTemplateState] = useState<Record<string, unknown>>({});
+  const [notification, setNotification] = useState<{ message: string; type: "error" | "info" } | null>(null);
+  const formRef = useRef<EntryFormHandle>(null);
+  const undoLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!showCategories) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowCategories(false);
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [showCategories]);
+
+  const loadFromDisk = useCallback(async () => {
+    try {
+      const [files, settings] = await Promise.all([loadAllFromDisk(), loadSettings()]);
+
+      const newCategories: Category[] = [];
+      const newEntries: Entry[] = [];
+
+      for (const file of files) {
+        const catId = generateId();
+        newCategories.push({ id: catId, name: file.fileName });
+
+        for (const val of Object.values(file.entries)) {
+          const { key, keysecondary, comment, content, ...rest } = val as Record<string, unknown>;
+          newEntries.push({
+            id: generateId(),
+            name: (comment as string) ?? "",
+            keys: (key as string[]) ?? [],
+            content: (content as string) ?? "",
+            category: catId,
+            extra: { keysecondary: keysecondary ?? [], ...rest },
+          });
+        }
+      }
+
+      setCategories(newCategories);
+      setEntries(newEntries);
+      setEditing(null);
+      setFilterCat("");
+      setClipboardTemplate(settings.clipboardTemplate || "{{content}}");
+      const et = settings.exportTemplate || {};
+      setExportTemplateState(et);
+      setExportTemplate(et);
+    } catch (err) {
+      console.error("Failed to load from disk:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFromDisk();
+  }, [loadFromDisk]);
+
+  // Ctrl+Z to restore latest snapshot (2s debounce, disabled when input focused)
+  useEffect(() => {
+    async function handleUndo(e: KeyboardEvent) {
+      if (e.key !== "z" || !e.ctrlKey || e.shiftKey || e.altKey) return;
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (undoLockRef.current) return;
+
+      e.preventDefault();
+      undoLockRef.current = true;
+      setTimeout(() => { undoLockRef.current = false; }, 2000);
+
+      try {
+        const settings = await loadSettings();
+        const snapshotName = settings.latestSnapshot as string | undefined;
+        if (!snapshotName) return;
+        // Save current state to localStorage before restoring
+        const current = await getCurrentSnapshot();
+        savePreviousSnapshot(current);
+        const result = await restoreSnapshot(snapshotName);
+        if (result.error) {
+          setNotification({ message: result.error, type: "error" });
+        } else {
+          setNotification({ message: `Restored: ${result.restored}`, type: "info" });
+          const updated = { ...settings, latestSnapshot: null };
+          await fetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updated, null, 2),
+          });
+          await loadFromDisk();
+        }
+      } catch {
+        setNotification({ message: "Failed to restore snapshot.", type: "error" });
+      }
+
+      setTimeout(() => setNotification(null), 3000);
+    }
+    window.addEventListener("keydown", handleUndo);
+    return () => window.removeEventListener("keydown", handleUndo);
+  }, [loadFromDisk]);
+
+  // Ctrl+Y to redo (restore previousSnapshot from localStorage)
+  useEffect(() => {
+    async function handleRedo(e: KeyboardEvent) {
+      if (e.key !== "y" || !e.ctrlKey || e.shiftKey || e.altKey) return;
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (undoLockRef.current) return;
+
+      e.preventDefault();
+      undoLockRef.current = true;
+      setTimeout(() => { undoLockRef.current = false; }, 2000);
+
+      const prev = loadPreviousSnapshot();
+      if (!prev) return;
+
+      try {
+        await restoreRawSnapshot(prev);
+        clearPreviousSnapshot();
+        setNotification({ message: "Redo: restored previous state.", type: "info" });
+        await loadFromDisk();
+      } catch {
+        setNotification({ message: "Failed to redo.", type: "error" });
+      }
+
+      setTimeout(() => setNotification(null), 3000);
+    }
+    window.addEventListener("keydown", handleRedo);
+    return () => window.removeEventListener("keydown", handleRedo);
+  }, [loadFromDisk]);
+
+  useEffect(() => { saveEntries(entries); }, [entries]);
+  useEffect(() => { saveCategories(categories); }, [categories]);
+
+  const getCatName = useCallback((catId: string) => {
+    return categories.find((c) => c.id === catId)?.name;
+  }, [categories]);
+
+  function syncCategoryToDisk(catId: string, allEntries: Entry[], catName?: string) {
+    const name = catName ?? getCatName(catId);
+    if (!name) return;
+    const catEntries = allEntries.filter((e) => e.category === catId);
+    saveCategoryFile(name, catEntries);
+  }
+
+  const filtered = entries
+    .filter((e) => {
+      if (filterCat && e.category !== filterCat) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return e.keys.some((k) => k.toLowerCase().includes(q));
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  function handleSave(name: string, keys: string[], content: string, category: string) {
+    createSnapshot();
+    if (editing) {
+      const oldCategory = editing.category;
+      setEntries((prev) => {
+        const next = prev.map((e) => (e.id === editing.id ? { ...e, name, keys, content, category } : e));
+        syncCategoryToDisk(category, next);
+        if (oldCategory !== category) {
+          syncCategoryToDisk(oldCategory, next);
+        }
+        return next;
+      });
+      setEditing(null);
+    } else {
+      setEntries((prev) => {
+        const next = [...prev, { id: generateId(), name, keys, content, category }];
+        syncCategoryToDisk(category, next);
+        return next;
+      });
+    }
+  }
+
+  function handleDelete(id: string) {
+    createSnapshot();
+    const entry = entries.find((e) => e.id === id);
+    setEntries((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      if (entry) syncCategoryToDisk(entry.category, next);
+      return next;
+    });
+    if (editing?.id === id) setEditing(null);
+  }
+
+  function handleDuplicate(id: string) {
+    createSnapshot();
+    setEntries((prev) => {
+      const source = prev.find((e) => e.id === id);
+      if (!source) return prev;
+      const next = [...prev, { ...source, id: generateId() }];
+      syncCategoryToDisk(source.category, next);
+      return next;
+    });
+  }
+
+  function handleMove(id: string, categoryId: string) {
+    createSnapshot();
+    const entry = entries.find((e) => e.id === id);
+    setEntries((prev) => {
+      const next = prev.map((e) => (e.id === id ? { ...e, category: categoryId } : e));
+      if (entry) {
+        syncCategoryToDisk(entry.category, next);
+        syncCategoryToDisk(categoryId, next);
+      }
+      return next;
+    });
+  }
+
+  function handleAddCategory(name: string) {
+    createSnapshot();
+    if (categories.some((c) => c.name === name)) {
+      setCatError(`Category "${name}" already exists.`);
+      return;
+    }
+    setCatError("");
+    const catId = generateId();
+    setCategories((prev) => [...prev, { id: catId, name }]);
+    saveCategoryFile(name, []);
+  }
+
+  function handleRenameCategory(id: string, newName: string) {
+    createSnapshot();
+    const oldCat = categories.find((c) => c.id === id);
+    if (!oldCat) return;
+    if (categories.some((c) => c.id !== id && c.name === newName)) {
+      setCatError(`Category "${newName}" already exists.`);
+      return;
+    }
+    setCatError("");
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name: newName } : c)));
+    renameCategoryFile(oldCat.name, newName);
+  }
+
+  function handleDeleteCategory(id: string) {
+    createSnapshot();
+    const cat = categories.find((c) => c.id === id);
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    setEntries((prev) => prev.filter((e) => e.category !== id));
+    if (filterCat === id) setFilterCat("");
+    if (cat) deleteCategoryFile(cat.name);
+  }
+
+  function applyImport(result: ImportResult) {
+    const categoryName = result.fileName;
+    const existing = categories.find((c) => c.name === categoryName);
+    let catId: string;
+
+    if (existing) {
+      catId = existing.id;
+      setEntries((prev) => {
+        const next = [
+          ...prev.filter((e) => e.category !== catId),
+          ...result.entries.map((e) => ({ ...e, id: generateId(), category: catId })),
+        ];
+        syncCategoryToDisk(catId, next, categoryName);
+        return next;
+      });
+    } else {
+      catId = generateId();
+      setCategories((prev) => [...prev, { id: catId, name: categoryName }]);
+      setEntries((prev) => {
+        const newEntries = result.entries.map((e) => ({ ...e, id: generateId(), category: catId }));
+        const next = [...prev, ...newEntries];
+        syncCategoryToDisk(catId, next, categoryName);
+        return next;
+      });
+    }
+  }
+
+  async function handleImport() {
+    try {
+      const result = await importFromFile();
+      applyImport(result);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Lorebook Management</h1>
+      </header>
+
+      <div className="main-layout">
+        <div className="left-panel">
+          <div className="filters">
+            <input
+              type="text"
+              placeholder="Search keys..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <EntryList
+            entries={filtered}
+            categories={categories}
+            onEdit={setEditing}
+            onDelete={handleDelete}
+            editingId={editing?.id ?? null}
+            onDuplicate={handleDuplicate}
+            onMove={handleMove}
+            onCopy={(content) => {
+              navigator.clipboard.writeText(formatClipboard(clipboardTemplate, content));
+            }}
+          />
+        </div>
+
+        <div className="right-panel">
+          <EntryForm
+            ref={formRef}
+            editing={editing}
+            categories={categories}
+            onSave={handleSave}
+            onCancel={() => setEditing(null)}
+          />
+        </div>
+
+        <div className="sidebar">
+          {/* Form actions */}
+          <button className="sidebar-btn sidebar-submit" title={editing ? "Update" : "Add"} onClick={() => formRef.current?.submit()}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {editing
+                ? <><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></>
+                : <><path d="M12 5v14"/><path d="M5 12h14"/></>
+              }
+            </svg>
+          </button>
+          {editing && (
+            <button className="sidebar-btn sidebar-cancel" title="Cancel" onClick={() => setEditing(null)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+              </svg>
+            </button>
+          )}
+
+          <div className="sidebar-divider" />
+
+          {/* App actions */}
+          <button className="sidebar-btn" title="Categories" onClick={() => setShowCategories(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
+          <button className="sidebar-btn" title="Refresh" onClick={loadFromDisk}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/>
+            </svg>
+          </button>
+          <button className="sidebar-btn" title="Settings" onClick={() => setShowSettings(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button className="sidebar-btn" title="Import" onClick={handleImport}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </button>
+          <button className="sidebar-btn" title="Export" onClick={() => setShowExport(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button className="sidebar-btn" title="Open data folder" onClick={() => fetch("/api/open-folder", { method: "POST" })}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+          <button className="sidebar-btn" title="Restore snapshot" onClick={() => setShowRestore(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><circle cx="12" cy="12" r="1"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {showCategories && (
+        <div className="modal-backdrop" onClick={() => setShowCategories(false)}>
+          <div className="modal categories-modal" onClick={(e) => e.stopPropagation()}>
+            <CategoryManager
+              categories={categories}
+              catError={catError}
+              onAdd={handleAddCategory}
+              onRename={handleRenameCategory}
+              onDelete={handleDeleteCategory}
+            />
+            <div className="modal-actions">
+              <button onClick={() => setShowCategories(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRestore && (
+        <RestoreModal
+          onRestore={loadFromDisk}
+          onClose={() => setShowRestore(false)}
+        />
+      )}
+
+      {showExport && (
+        <ExportModal
+          entries={entries}
+          categories={categories}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsModal
+          clipboardTemplate={clipboardTemplate}
+          exportTemplate={exportTemplate}
+          onSave={(ct, et) => {
+            setClipboardTemplate(ct);
+            setExportTemplateState(et);
+            setExportTemplate(et);
+          }}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {notification && (
+        <div className={`toast toast-${notification.type}`}>
+          {notification.message}
+        </div>
+      )}
+    </div>
+  );
+}
