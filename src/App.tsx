@@ -177,8 +177,16 @@ export default function App() {
     .filter((e) => {
       if (filterCat && e.category !== filterCat) return false;
       if (!search.trim()) return true;
-      const q = search.toLowerCase();
-      return e.keys.some((k) => k.toLowerCase().includes(q));
+      const terms: string[] = [];
+      const raw = search.toLowerCase();
+      const re = /"([^"]*)"|\S+/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(raw)) !== null) {
+        const t = (m[1] ?? m[0]).trim();
+        if (t) terms.push(t);
+      }
+      const name = e.name.toLowerCase();
+      return terms.some((q) => name.includes(q) || e.keys.some((k) => k.toLowerCase().includes(q)));
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
