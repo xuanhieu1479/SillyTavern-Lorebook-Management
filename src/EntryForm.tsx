@@ -76,8 +76,8 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
     }
   }
 
-  function handleShiftEnter(e: React.KeyboardEvent) {
-    if (e.key === "Enter" && e.shiftKey) {
+  function handleCtrlEnter(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && e.ctrlKey) {
       e.preventDefault();
       formRef.current?.requestSubmit();
     }
@@ -92,7 +92,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
         <select
           value={category}
           onChange={(e) => { setCategory(e.target.value); setError(""); }}
-          onKeyDown={handleShiftEnter}
+          onKeyDown={handleCtrlEnter}
         >
           <option value="">— Select category —</option>
           {categories.map((c) => (
@@ -123,7 +123,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleShiftEnter}
+          onKeyDown={handleCtrlEnter}
           placeholder="Entry content..."
         />
       </div>

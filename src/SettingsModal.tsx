@@ -74,7 +74,7 @@ export default function SettingsModal({ clipboardTemplate, exportTemplate, onSav
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
-      if (e.key === "Enter" && e.shiftKey) {
+      if (e.key === "Enter" && e.ctrlKey) {
         e.preventDefault();
         handleSave();
       }
