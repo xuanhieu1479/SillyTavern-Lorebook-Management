@@ -121,3 +121,7 @@ textarea {
 select {
   cursor: pointer;
 }
+
+select.placeholder {
+  color: var(--text);
+}

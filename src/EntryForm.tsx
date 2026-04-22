@@ -90,11 +90,12 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
       <div className="form-field">
         <label>Category *</label>
         <select
+          className={category ? "" : "placeholder"}
           value={category}
           onChange={(e) => { setCategory(e.target.value); setError(""); }}
           onKeyDown={handleCtrlEnter}
         >
-          <option value="">— Select category —</option>
+          <option value="" disabled hidden>Select category</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}

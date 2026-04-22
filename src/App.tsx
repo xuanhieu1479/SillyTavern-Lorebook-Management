@@ -26,8 +26,10 @@ export default function App() {
   const [clipboardTemplate, setClipboardTemplate] = useState("{{content}}");
   const [dataDir, setDataDir] = useState("");
   const [notification, setNotification] = useState<{ message: string; type: "error" | "info" } | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const formRef = useRef<EntryFormHandle>(null);
   const undoLockRef = useRef(false);
+  const highlightTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!showCategories) return;
@@ -216,6 +218,7 @@ export default function App() {
 
   function handleDuplicate(id: string) {
     createSnapshot();
+    const newId = generateId();
     setEntries((prev) => {
       const source = prev.find((e) => e.id === id);
       if (!source) return prev;
@@ -226,13 +229,19 @@ export default function App() {
         : makeRawForNewEntry(siblings);
       const duplicate: Entry = {
         ...source,
-        id: generateId(),
+        id: newId,
         extra: { _raw: newRaw },
       };
       const next = [...prev, duplicate];
       syncCategoryToDisk(source.category, next);
       return next;
     });
+    setHighlightId(newId);
+    if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightId(null);
+      highlightTimerRef.current = null;
+    }, 5000);
   }
 
   function handleMove(id: string, categoryId: string) {
@@ -276,6 +285,7 @@ export default function App() {
             onEdit={setEditing}
             onDelete={handleDelete}
             editingId={editing?.id ?? null}
+            highlightId={highlightId}
             onDuplicate={handleDuplicate}
             onMove={handleMove}
             onCopy={(content) => {
@@ -346,7 +356,14 @@ export default function App() {
       {showCategories && (
         <div className="modal-backdrop" onClick={() => setShowCategories(false)}>
           <div className="modal categories-modal" onClick={(e) => e.stopPropagation()}>
-            <CategoryManager categories={categories} />
+            <CategoryManager
+              categories={categories}
+              entries={entries}
+              highlightId={highlightId}
+              onDuplicate={handleDuplicate}
+              onMove={handleMove}
+              onDelete={handleDelete}
+            />
             <div className="modal-actions">
               <button onClick={() => setShowCategories(false)}>Close</button>
             </div>
