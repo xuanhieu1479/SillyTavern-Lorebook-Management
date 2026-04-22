@@ -8,52 +8,37 @@ interface SillyTavernEntry {
   [k: string]: unknown;
 }
 
-// Baseline defaults matching what ST writes for a freshly-created entry. Used only
-// when a file has zero existing entries to clone from.
-const BASELINE_NEW_ENTRY_RAW: Record<string, unknown> = {
+// Runtime-loaded baseline for brand-new entries in empty lorebook files.
+// Loaded once at module init from public/new-entry-template.json (an ST-format
+// world file; entry "0" is used as the baseline). If loading fails, we fall
+// back to a minimal object — ST will supply its own runtime defaults for any
+// missing fields. To update the baseline when ST's defaults drift, replace the
+// public/new-entry-template.json file with a fresh ST-created lorebook; no
+// source edit needed.
+let _baselineNewEntryRaw: Record<string, unknown> | null = null;
+
+const FALLBACK_BASELINE: Record<string, unknown> = {
   uid: 0,
   key: [],
   keysecondary: [],
   comment: "",
   content: "",
-  constant: false,
-  vectorized: false,
-  selective: true,
-  selectiveLogic: 0,
-  addMemo: false,
-  order: 100,
-  position: 0,
-  disable: false,
-  ignoreBudget: false,
-  excludeRecursion: false,
-  preventRecursion: false,
-  matchPersonaDescription: false,
-  matchCharacterDescription: false,
-  matchCharacterPersonality: false,
-  matchCharacterDepthPrompt: false,
-  matchScenario: false,
-  matchCreatorNotes: false,
-  delayUntilRecursion: 0,
-  probability: 100,
-  useProbability: true,
-  depth: 4,
-  outletName: "",
-  group: "",
-  groupOverride: false,
-  groupWeight: 100,
-  scanDepth: null,
-  caseSensitive: null,
-  matchWholeWords: null,
-  useGroupScoring: null,
-  automationId: "",
-  role: null,
-  sticky: null,
-  cooldown: null,
-  delay: null,
-  triggers: [],
   displayIndex: 0,
-  characterFilter: { isExclude: false, names: [], tags: [] },
 };
+
+async function loadBaselineTemplate(): Promise<void> {
+  try {
+    const res = await fetch("/new-entry-template.json");
+    if (!res.ok) return;
+    const data = await res.json() as { entries?: Record<string, Record<string, unknown>> };
+    const firstEntry = data.entries ? Object.values(data.entries)[0] : null;
+    if (firstEntry) _baselineNewEntryRaw = firstEntry;
+  } catch {
+    // Silent fallback — baseline is rarely used anyway (only in truly empty files).
+  }
+}
+
+void loadBaselineTemplate();
 
 function nextUidAndDisplayIndex(siblings: Entry[]): { uid: number; displayIndex: number } {
   let maxUid = -1;
@@ -70,7 +55,9 @@ function nextUidAndDisplayIndex(siblings: Entry[]): { uid: number; displayIndex:
 export function makeRawForNewEntry(siblings: Entry[]): Record<string, unknown> {
   const { uid, displayIndex } = nextUidAndDisplayIndex(siblings);
   const lastSibling = siblings.length > 0 ? siblings[siblings.length - 1] : null;
-  const templateRaw = (lastSibling?.extra?._raw as Record<string, unknown> | undefined) ?? BASELINE_NEW_ENTRY_RAW;
+  const templateRaw = (lastSibling?.extra?._raw as Record<string, unknown> | undefined)
+    ?? _baselineNewEntryRaw
+    ?? FALLBACK_BASELINE;
   const clone = structuredClone(templateRaw) as Record<string, unknown>;
   clone.uid = uid;
   clone.displayIndex = displayIndex;
