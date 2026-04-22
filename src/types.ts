@@ -10,4 +10,5 @@ export interface Entry {
 export interface Category {
   id: string;
   name: string;
+  extras?: Record<string, unknown>;
 }

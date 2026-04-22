@@ -577,6 +577,12 @@ header h1 {
   resize: none;
 }
 
+.settings-input {
+  font-family: monospace;
+  font-size: 13px;
+  width: 100%;
+}
+
 .settings-export-textarea {
   font-size: 13px;
 }

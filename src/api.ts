@@ -8,24 +8,122 @@ interface SillyTavernEntry {
   [k: string]: unknown;
 }
 
-function entriesToSillyTavern(entries: Entry[]): string {
-  const defaults = getExportTemplate();
+// Baseline defaults matching what ST writes for a freshly-created entry. Used only
+// when a file has zero existing entries to clone from.
+const BASELINE_NEW_ENTRY_RAW: Record<string, unknown> = {
+  uid: 0,
+  key: [],
+  keysecondary: [],
+  comment: "",
+  content: "",
+  constant: false,
+  vectorized: false,
+  selective: true,
+  selectiveLogic: 0,
+  addMemo: false,
+  order: 100,
+  position: 0,
+  disable: false,
+  ignoreBudget: false,
+  excludeRecursion: false,
+  preventRecursion: false,
+  matchPersonaDescription: false,
+  matchCharacterDescription: false,
+  matchCharacterPersonality: false,
+  matchCharacterDepthPrompt: false,
+  matchScenario: false,
+  matchCreatorNotes: false,
+  delayUntilRecursion: 0,
+  probability: 100,
+  useProbability: true,
+  depth: 4,
+  outletName: "",
+  group: "",
+  groupOverride: false,
+  groupWeight: 100,
+  scanDepth: null,
+  caseSensitive: null,
+  matchWholeWords: null,
+  useGroupScoring: null,
+  automationId: "",
+  role: null,
+  sticky: null,
+  cooldown: null,
+  delay: null,
+  triggers: [],
+  displayIndex: 0,
+  characterFilter: { isExclude: false, names: [], tags: [] },
+};
+
+function nextUidAndDisplayIndex(siblings: Entry[]): { uid: number; displayIndex: number } {
+  let maxUid = -1;
+  let maxDisplayIndex = -1;
+  for (const e of siblings) {
+    const r = e.extra?._raw as Record<string, unknown> | undefined;
+    if (!r) continue;
+    if (typeof r.uid === "number" && r.uid > maxUid) maxUid = r.uid;
+    if (typeof r.displayIndex === "number" && r.displayIndex > maxDisplayIndex) maxDisplayIndex = r.displayIndex;
+  }
+  return { uid: maxUid + 1, displayIndex: maxDisplayIndex + 1 };
+}
+
+export function makeRawForNewEntry(siblings: Entry[]): Record<string, unknown> {
+  const { uid, displayIndex } = nextUidAndDisplayIndex(siblings);
+  const lastSibling = siblings.length > 0 ? siblings[siblings.length - 1] : null;
+  const templateRaw = (lastSibling?.extra?._raw as Record<string, unknown> | undefined) ?? BASELINE_NEW_ENTRY_RAW;
+  const clone = structuredClone(templateRaw) as Record<string, unknown>;
+  clone.uid = uid;
+  clone.displayIndex = displayIndex;
+  clone.keysecondary = [];
+  return clone;
+}
+
+export function cloneRawForDuplicate(sourceRaw: Record<string, unknown>, siblings: Entry[]): Record<string, unknown> {
+  const { uid, displayIndex } = nextUidAndDisplayIndex(siblings);
+  const clone = structuredClone(sourceRaw) as Record<string, unknown>;
+  clone.uid = uid;
+  clone.displayIndex = displayIndex;
+  return clone;
+}
+
+function entriesToSillyTavern(entries: Entry[], fileExtras: Record<string, unknown> = {}): string {
   const obj: Record<string, SillyTavernEntry> = {};
+
+  const existingUids = entries
+    .map((e) => (e.extra?._raw as Record<string, unknown> | undefined)?.uid)
+    .filter((u): u is number => typeof u === "number");
+  let nextUid = existingUids.length ? Math.max(...existingUids) + 1 : 0;
+
   entries.forEach((entry, i) => {
-    const extra = (entry.extra ?? {}) as Record<string, unknown>;
-    const { keysecondary, ...rest } = extra;
-    obj[String(i)] = {
-      uid: i,
-      ...defaults,
-      ...rest,
-      key: entry.keys,
-      keysecondary: (keysecondary as string[]) ?? [],
-      comment: entry.name,
-      content: entry.content,
-      displayIndex: i,
-    };
+    const raw = (entry.extra?._raw ?? null) as Record<string, unknown> | null;
+    let out: Record<string, unknown>;
+    let uid: number;
+
+    if (raw) {
+      uid = typeof raw.uid === "number" ? raw.uid : nextUid++;
+      out = {
+        ...raw,
+        key: entry.keys,
+        comment: entry.name,
+        content: entry.content,
+      };
+      out.uid = uid;
+    } else {
+      uid = nextUid++;
+      out = {
+        uid,
+        key: entry.keys,
+        keysecondary: [],
+        comment: entry.name,
+        content: entry.content,
+        displayIndex: i,
+      };
+    }
+
+    obj[String(uid)] = out as SillyTavernEntry;
   });
-  return JSON.stringify({ entries: obj }, null, 4);
+
+  return JSON.stringify({ ...fileExtras, entries: obj }, null, 4);
 }
 
 interface RawSillyTavernEntry {
@@ -38,6 +136,7 @@ interface RawSillyTavernEntry {
 
 interface DiskFile {
   fileName: string;
+  fileExtras: Record<string, unknown>;
   entries: Record<string, RawSillyTavernEntry>;
 }
 
@@ -46,54 +145,18 @@ export async function loadAllFromDisk(): Promise<DiskFile[]> {
   return res.json();
 }
 
-export function exportCategoryToFile(fileName: string, entries: Entry[]): void {
-  const content = entriesToSillyTavern(entries);
-  const blob = new Blob([content], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${fileName}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export async function saveCategoryFile(fileName: string, entries: Entry[]): Promise<void> {
+export async function saveCategoryFile(fileName: string, entries: Entry[], fileExtras: Record<string, unknown> = {}): Promise<void> {
   await fetch("/api/save-category", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileName, content: entriesToSillyTavern(entries) }),
-  });
-}
-
-export async function deleteCategoryFile(fileName: string): Promise<void> {
-  await fetch("/api/delete-category", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileName }),
-  });
-}
-
-export async function renameCategoryFile(oldName: string, newName: string): Promise<void> {
-  await fetch("/api/rename-category", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ oldName, newName }),
+    body: JSON.stringify({ fileName, content: entriesToSillyTavern(entries, fileExtras) }),
   });
 }
 
 export interface AppSettings {
   clipboardTemplate?: string;
-  exportTemplate?: Record<string, unknown>;
-}
-
-let _exportTemplate: Record<string, unknown> = {};
-
-export function getExportTemplate(): Record<string, unknown> {
-  return _exportTemplate;
-}
-
-export function setExportTemplate(t: Record<string, unknown>) {
-  _exportTemplate = t;
+  dataDir?: string;
+  latestSnapshot?: string | null;
 }
 
 export async function createSnapshot(): Promise<void> {
@@ -153,10 +216,12 @@ export async function loadSettings(): Promise<AppSettings> {
   return res.json();
 }
 
-export async function saveSettings(settings: AppSettings): Promise<void> {
+export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
+  const existing = await loadSettings();
+  const merged = { ...existing, ...settings };
   await fetch("/api/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(settings, null, 2),
+    body: JSON.stringify(merged, null, 2),
   });
 }

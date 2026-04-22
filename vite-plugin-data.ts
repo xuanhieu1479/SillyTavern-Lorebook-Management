@@ -3,27 +3,44 @@ import fs from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
 
-const DATA_DIR = path.resolve(__dirname, "data");
+const APP_DIR = path.resolve(__dirname, "data");
+const BACKUP_DIR = path.join(APP_DIR, "backup");
+const SETTINGS_PATH = path.join(APP_DIR, "settings.json");
 
-const BACKUP_DIR = path.join(DATA_DIR, "backup");
-
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+function ensureAppDir() {
+  if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true });
 }
 
 function ensureBackupDir() {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  }
+  if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+function readSettings(): Record<string, unknown> {
+  try {
+    if (fs.existsSync(SETTINGS_PATH)) {
+      return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf-8"));
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+function getDataDir(): string {
+  const settings = readSettings();
+  const configured =
+    typeof settings.dataDir === "string" && settings.dataDir.trim() ? settings.dataDir.trim() : null;
+  return configured ? path.resolve(configured) : APP_DIR;
+}
+
+function listWorldFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "settings.json");
 }
 
 export default function dataPlugin(): Plugin {
   return {
     name: "data-api",
     configureServer(server) {
-      // Load all JSON files from /data (except settings.json)
+      // Load all lorebook files from the configured worlds directory.
       server.middlewares.use("/api/load-all", (req, res) => {
         if (req.method !== "GET") {
           res.statusCode = 405;
@@ -31,15 +48,16 @@ export default function dataPlugin(): Plugin {
           return;
         }
         try {
-          ensureDataDir();
-          const files = fs.readdirSync(DATA_DIR)
-            .filter((f) => f.endsWith(".json") && f !== "settings.json");
+          const dataDir = getDataDir();
+          const files = listWorldFiles(dataDir);
           const result = files.map((f) => {
-            const raw = fs.readFileSync(path.join(DATA_DIR, f), "utf-8");
-            const data = JSON.parse(raw);
+            const raw = fs.readFileSync(path.join(dataDir, f), "utf-8");
+            const data = JSON.parse(raw) as Record<string, unknown>;
+            const { entries, ...fileExtras } = data;
             return {
               fileName: f.replace(/\.json$/i, ""),
-              entries: data.entries ?? {},
+              fileExtras,
+              entries: (entries as Record<string, unknown>) ?? {},
             };
           });
           res.setHeader("Content-Type", "application/json");
@@ -50,7 +68,7 @@ export default function dataPlugin(): Plugin {
         }
       });
 
-      // Create a snapshot of all data files
+      // Create a snapshot of all world files into APP_DIR/backup/.
       server.middlewares.use("/api/snapshot", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
@@ -58,13 +76,13 @@ export default function dataPlugin(): Plugin {
           return;
         }
         try {
-          ensureDataDir();
+          ensureAppDir();
           ensureBackupDir();
-          const files = fs.readdirSync(DATA_DIR)
-            .filter((f) => f.endsWith(".json") && f !== "settings.json");
+          const dataDir = getDataDir();
+          const files = listWorldFiles(dataDir);
           const snapshot: Record<string, unknown> = {};
           for (const f of files) {
-            const raw = fs.readFileSync(path.join(DATA_DIR, f), "utf-8");
+            const raw = fs.readFileSync(path.join(dataDir, f), "utf-8");
             try {
               snapshot[f] = JSON.parse(raw);
             } catch {
@@ -75,14 +93,9 @@ export default function dataPlugin(): Plugin {
           const pad = (n: number) => String(n).padStart(2, "0");
           const name = `Snapshot-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.json`;
           fs.writeFileSync(path.join(BACKUP_DIR, name), JSON.stringify(snapshot, null, 2), "utf-8");
-          // Update latestSnapshot in settings.json
-          const settingsPath = path.join(DATA_DIR, "settings.json");
-          let settings: Record<string, unknown> = {};
-          if (fs.existsSync(settingsPath)) {
-            try { settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8")); } catch { /* ignore */ }
-          }
+          const settings = readSettings();
           settings.latestSnapshot = name;
-          fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
+          fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify({ ok: true, name }));
         } catch (err) {
@@ -91,7 +104,7 @@ export default function dataPlugin(): Plugin {
         }
       });
 
-      // Get current state as snapshot (without writing to disk)
+      // Snapshot current state without writing to disk (used for redo stash).
       server.middlewares.use("/api/snapshot-current", (req, res) => {
         if (req.method !== "GET") {
           res.statusCode = 405;
@@ -99,12 +112,11 @@ export default function dataPlugin(): Plugin {
           return;
         }
         try {
-          ensureDataDir();
-          const files = fs.readdirSync(DATA_DIR)
-            .filter((f) => f.endsWith(".json") && f !== "settings.json");
+          const dataDir = getDataDir();
+          const files = listWorldFiles(dataDir);
           const snapshot: Record<string, unknown> = {};
           for (const f of files) {
-            const raw = fs.readFileSync(path.join(DATA_DIR, f), "utf-8");
+            const raw = fs.readFileSync(path.join(dataDir, f), "utf-8");
             try { snapshot[f] = JSON.parse(raw); } catch { snapshot[f] = raw; }
           }
           res.setHeader("Content-Type", "application/json");
@@ -115,7 +127,7 @@ export default function dataPlugin(): Plugin {
         }
       });
 
-      // Restore from a raw snapshot object (for redo from localStorage)
+      // Restore from a raw snapshot object. Only overwrites files that currently exist.
       server.middlewares.use("/api/restore-raw", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
@@ -126,18 +138,13 @@ export default function dataPlugin(): Plugin {
         req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
         req.on("end", () => {
           try {
-            ensureDataDir();
+            const dataDir = getDataDir();
             const snapshot = JSON.parse(body) as Record<string, unknown>;
-            // Remove current category files
-            const existing = fs.readdirSync(DATA_DIR)
-              .filter((f) => f.endsWith(".json") && f !== "settings.json");
-            for (const f of existing) {
-              fs.unlinkSync(path.join(DATA_DIR, f));
-            }
-            // Write snapshot files
+            const existing = new Set(listWorldFiles(dataDir));
             for (const [fileName, content] of Object.entries(snapshot)) {
+              if (!existing.has(fileName)) continue;
               fs.writeFileSync(
-                path.join(DATA_DIR, fileName),
+                path.join(dataDir, fileName),
                 typeof content === "string" ? content : JSON.stringify(content, null, 4),
                 "utf-8"
               );
@@ -151,7 +158,7 @@ export default function dataPlugin(): Plugin {
         });
       });
 
-      // List all backups
+      // List all backups.
       server.middlewares.use("/api/backups", (req, res) => {
         if (req.method !== "GET") {
           res.statusCode = 405;
@@ -175,7 +182,7 @@ export default function dataPlugin(): Plugin {
         }
       });
 
-      // Restore from a snapshot
+      // Restore from a named backup. Only overwrites files that currently exist.
       server.middlewares.use("/api/restore", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
@@ -186,7 +193,6 @@ export default function dataPlugin(): Plugin {
         req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
         req.on("end", () => {
           try {
-            ensureDataDir();
             ensureBackupDir();
             const { snapshotName } = JSON.parse(body) as { snapshotName?: string };
 
@@ -196,20 +202,15 @@ export default function dataPlugin(): Plugin {
               return;
             }
 
+            const dataDir = getDataDir();
             const raw = fs.readFileSync(path.join(BACKUP_DIR, snapshotName), "utf-8");
             const snapshot = JSON.parse(raw) as Record<string, unknown>;
+            const existing = new Set(listWorldFiles(dataDir));
 
-            // Remove all current category .json files (not settings.json)
-            const existing = fs.readdirSync(DATA_DIR)
-              .filter((f) => f.endsWith(".json") && f !== "settings.json");
-            for (const f of existing) {
-              fs.unlinkSync(path.join(DATA_DIR, f));
-            }
-
-            // Write snapshot files back
             for (const [fileName, content] of Object.entries(snapshot)) {
+              if (!existing.has(fileName)) continue;
               fs.writeFileSync(
-                path.join(DATA_DIR, fileName),
+                path.join(dataDir, fileName),
                 typeof content === "string" ? content : JSON.stringify(content, null, 4),
                 "utf-8"
               );
@@ -224,15 +225,15 @@ export default function dataPlugin(): Plugin {
         });
       });
 
-      // Open data folder in file explorer
+      // Open the configured worlds folder in the OS file explorer.
       server.middlewares.use("/api/open-folder", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
           res.end();
           return;
         }
-        ensureDataDir();
-        const normalized = path.resolve(DATA_DIR);
+        const dataDir = getDataDir();
+        const normalized = path.resolve(dataDir);
         const platform = process.platform;
         const cmd = platform === "win32" ? `explorer "${normalized}"` : platform === "darwin" ? `open "${normalized}"` : `xdg-open "${normalized}"`;
         exec(cmd);
@@ -240,14 +241,13 @@ export default function dataPlugin(): Plugin {
         res.end(JSON.stringify({ ok: true }));
       });
 
-      // Load settings
+      // Read/write settings.json (lives in APP_DIR, separate from the worlds folder).
       server.middlewares.use("/api/settings", (req, res) => {
-        const filePath = path.join(DATA_DIR, "settings.json");
         if (req.method === "GET") {
           try {
-            ensureDataDir();
-            if (fs.existsSync(filePath)) {
-              const raw = fs.readFileSync(filePath, "utf-8");
+            ensureAppDir();
+            if (fs.existsSync(SETTINGS_PATH)) {
+              const raw = fs.readFileSync(SETTINGS_PATH, "utf-8");
               res.setHeader("Content-Type", "application/json");
               res.end(raw);
             } else {
@@ -265,8 +265,8 @@ export default function dataPlugin(): Plugin {
           req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
           req.on("end", () => {
             try {
-              ensureDataDir();
-              fs.writeFileSync(filePath, body, "utf-8");
+              ensureAppDir();
+              fs.writeFileSync(SETTINGS_PATH, body, "utf-8");
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ ok: true }));
             } catch (err) {
@@ -280,7 +280,7 @@ export default function dataPlugin(): Plugin {
         res.end();
       });
 
-      // Save a category file (SillyTavern format)
+      // Save a world file to the configured worlds directory.
       server.middlewares.use("/api/save-category", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
@@ -292,60 +292,9 @@ export default function dataPlugin(): Plugin {
         req.on("end", () => {
           try {
             const { fileName, content } = JSON.parse(body);
-            ensureDataDir();
-            fs.writeFileSync(path.join(DATA_DIR, `${fileName}.json`), content, "utf-8");
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ ok: true }));
-          } catch (err) {
-            res.statusCode = 500;
-            res.end(JSON.stringify({ error: String(err) }));
-          }
-        });
-      });
-
-      // Delete a category file
-      server.middlewares.use("/api/delete-category", (req, res) => {
-        if (req.method !== "POST") {
-          res.statusCode = 405;
-          res.end();
-          return;
-        }
-        let body = "";
-        req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
-        req.on("end", () => {
-          try {
-            const { fileName } = JSON.parse(body);
-            const filePath = path.join(DATA_DIR, `${fileName}.json`);
-            if (fs.existsSync(filePath)) {
-              fs.unlinkSync(filePath);
-            }
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ ok: true }));
-          } catch (err) {
-            res.statusCode = 500;
-            res.end(JSON.stringify({ error: String(err) }));
-          }
-        });
-      });
-
-      // Rename a category file
-      server.middlewares.use("/api/rename-category", (req, res) => {
-        if (req.method !== "POST") {
-          res.statusCode = 405;
-          res.end();
-          return;
-        }
-        let body = "";
-        req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
-        req.on("end", () => {
-          try {
-            const { oldName, newName } = JSON.parse(body);
-            ensureDataDir();
-            const oldPath = path.join(DATA_DIR, `${oldName}.json`);
-            const newPath = path.join(DATA_DIR, `${newName}.json`);
-            if (fs.existsSync(oldPath)) {
-              fs.renameSync(oldPath, newPath);
-            }
+            const dataDir = getDataDir();
+            if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+            fs.writeFileSync(path.join(dataDir, `${fileName}.json`), content, "utf-8");
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ ok: true }));
           } catch (err) {

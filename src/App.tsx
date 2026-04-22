@@ -1,18 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Entry, Category } from "./types";
-import type { ImportResult } from "./store";
-import {
-  loadEntries, saveEntries,
-  loadCategories, saveCategories,
-  importFromFile,
-} from "./store";
-import { saveCategoryFile, deleteCategoryFile, renameCategoryFile, loadAllFromDisk, loadSettings, setExportTemplate, createSnapshot, restoreSnapshot, getCurrentSnapshot, restoreRawSnapshot, savePreviousSnapshot, loadPreviousSnapshot, clearPreviousSnapshot } from "./api";
+import { saveEntries, saveCategories } from "./store";
+import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, createSnapshot, restoreSnapshot, getCurrentSnapshot, restoreRawSnapshot, savePreviousSnapshot, loadPreviousSnapshot, clearPreviousSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
 import CategoryManager from "./CategoryManager";
 import SettingsModal, { formatClipboard } from "./SettingsModal";
-import ExportModal from "./ExportModal";
 import RestoreModal from "./RestoreModal";
 import "./App.css";
 
@@ -26,13 +20,11 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [catError, setCatError] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
-  const [showExport, setShowExport] = useState(false);
   const [showRestore, setShowRestore] = useState(false);
   const [clipboardTemplate, setClipboardTemplate] = useState("{{content}}");
-  const [exportTemplate, setExportTemplateState] = useState<Record<string, unknown>>({});
+  const [dataDir, setDataDir] = useState("");
   const [notification, setNotification] = useState<{ message: string; type: "error" | "info" } | null>(null);
   const formRef = useRef<EntryFormHandle>(null);
   const undoLockRef = useRef(false);
@@ -55,17 +47,17 @@ export default function App() {
 
       for (const file of files) {
         const catId = generateId();
-        newCategories.push({ id: catId, name: file.fileName });
+        newCategories.push({ id: catId, name: file.fileName, extras: file.fileExtras });
 
         for (const val of Object.values(file.entries)) {
-          const { key, keysecondary, comment, content, ...rest } = val as Record<string, unknown>;
+          const v = val as Record<string, unknown>;
           newEntries.push({
             id: generateId(),
-            name: (comment as string) ?? "",
-            keys: (key as string[]) ?? [],
-            content: (content as string) ?? "",
+            name: (v.comment as string) ?? "",
+            keys: (v.key as string[]) ?? [],
+            content: (v.content as string) ?? "",
             category: catId,
-            extra: { keysecondary: keysecondary ?? [], ...rest },
+            extra: { _raw: v },
           });
         }
       }
@@ -75,9 +67,7 @@ export default function App() {
       setEditing(null);
       setFilterCat("");
       setClipboardTemplate(settings.clipboardTemplate || "{{content}}");
-      const et = settings.exportTemplate || {};
-      setExportTemplateState(et);
-      setExportTemplate(et);
+      setDataDir(settings.dataDir ?? "");
     } catch (err) {
       console.error("Failed to load from disk:", err);
     }
@@ -101,9 +91,8 @@ export default function App() {
 
       try {
         const settings = await loadSettings();
-        const snapshotName = settings.latestSnapshot as string | undefined;
+        const snapshotName = settings.latestSnapshot;
         if (!snapshotName) return;
-        // Save current state to localStorage before restoring
         const current = await getCurrentSnapshot();
         savePreviousSnapshot(current);
         const result = await restoreSnapshot(snapshotName);
@@ -111,12 +100,7 @@ export default function App() {
           setNotification({ message: result.error, type: "error" });
         } else {
           setNotification({ message: `Restored: ${result.restored}`, type: "info" });
-          const updated = { ...settings, latestSnapshot: null };
-          await fetch("/api/settings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updated, null, 2),
-          });
+          await saveSettings({ latestSnapshot: null });
           await loadFromDisk();
         }
       } catch {
@@ -162,15 +146,12 @@ export default function App() {
   useEffect(() => { saveEntries(entries); }, [entries]);
   useEffect(() => { saveCategories(categories); }, [categories]);
 
-  const getCatName = useCallback((catId: string) => {
-    return categories.find((c) => c.id === catId)?.name;
-  }, [categories]);
-
   function syncCategoryToDisk(catId: string, allEntries: Entry[], catName?: string) {
-    const name = catName ?? getCatName(catId);
+    const cat = categories.find((c) => c.id === catId);
+    const name = catName ?? cat?.name;
     if (!name) return;
     const catEntries = allEntries.filter((e) => e.category === catId);
-    saveCategoryFile(name, catEntries);
+    saveCategoryFile(name, catEntries, cat?.extras ?? {});
   }
 
   const filtered = entries
@@ -205,7 +186,17 @@ export default function App() {
       setEditing(null);
     } else {
       setEntries((prev) => {
-        const next = [...prev, { id: generateId(), name, keys, content, category }];
+        const siblings = prev.filter((e) => e.category === category);
+        const newRaw = makeRawForNewEntry(siblings);
+        const newEntry: Entry = {
+          id: generateId(),
+          name,
+          keys,
+          content,
+          category,
+          extra: { _raw: newRaw },
+        };
+        const next = [...prev, newEntry];
         syncCategoryToDisk(category, next);
         return next;
       });
@@ -228,7 +219,17 @@ export default function App() {
     setEntries((prev) => {
       const source = prev.find((e) => e.id === id);
       if (!source) return prev;
-      const next = [...prev, { ...source, id: generateId() }];
+      const siblings = prev.filter((e) => e.category === source.category);
+      const sourceRaw = source.extra?._raw as Record<string, unknown> | undefined;
+      const newRaw = sourceRaw
+        ? cloneRawForDuplicate(sourceRaw, siblings)
+        : makeRawForNewEntry(siblings);
+      const duplicate: Entry = {
+        ...source,
+        id: generateId(),
+        extra: { _raw: newRaw },
+      };
+      const next = [...prev, duplicate];
       syncCategoryToDisk(source.category, next);
       return next;
     });
@@ -245,76 +246,6 @@ export default function App() {
       }
       return next;
     });
-  }
-
-  function handleAddCategory(name: string) {
-    createSnapshot();
-    if (categories.some((c) => c.name === name)) {
-      setCatError(`Category "${name}" already exists.`);
-      return;
-    }
-    setCatError("");
-    const catId = generateId();
-    setCategories((prev) => [...prev, { id: catId, name }]);
-    saveCategoryFile(name, []);
-  }
-
-  function handleRenameCategory(id: string, newName: string) {
-    createSnapshot();
-    const oldCat = categories.find((c) => c.id === id);
-    if (!oldCat) return;
-    if (categories.some((c) => c.id !== id && c.name === newName)) {
-      setCatError(`Category "${newName}" already exists.`);
-      return;
-    }
-    setCatError("");
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name: newName } : c)));
-    renameCategoryFile(oldCat.name, newName);
-  }
-
-  function handleDeleteCategory(id: string) {
-    createSnapshot();
-    const cat = categories.find((c) => c.id === id);
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-    setEntries((prev) => prev.filter((e) => e.category !== id));
-    if (filterCat === id) setFilterCat("");
-    if (cat) deleteCategoryFile(cat.name);
-  }
-
-  function applyImport(result: ImportResult) {
-    const categoryName = result.fileName;
-    const existing = categories.find((c) => c.name === categoryName);
-    let catId: string;
-
-    if (existing) {
-      catId = existing.id;
-      setEntries((prev) => {
-        const next = [
-          ...prev.filter((e) => e.category !== catId),
-          ...result.entries.map((e) => ({ ...e, id: generateId(), category: catId })),
-        ];
-        syncCategoryToDisk(catId, next, categoryName);
-        return next;
-      });
-    } else {
-      catId = generateId();
-      setCategories((prev) => [...prev, { id: catId, name: categoryName }]);
-      setEntries((prev) => {
-        const newEntries = result.entries.map((e) => ({ ...e, id: generateId(), category: catId }));
-        const next = [...prev, ...newEntries];
-        syncCategoryToDisk(catId, next, categoryName);
-        return next;
-      });
-    }
-  }
-
-  async function handleImport() {
-    try {
-      const result = await importFromFile();
-      applyImport(result);
-    } catch (err) {
-      console.error(err);
-    }
   }
 
   return (
@@ -399,17 +330,7 @@ export default function App() {
               <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
             </svg>
           </button>
-          <button className="sidebar-btn" title="Import" onClick={handleImport}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </button>
-          <button className="sidebar-btn" title="Export" onClick={() => setShowExport(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-          </button>
-          <button className="sidebar-btn" title="Open data folder" onClick={() => fetch("/api/open-folder", { method: "POST" })}>
+          <button className="sidebar-btn" title="Open worlds folder" onClick={() => fetch("/api/open-folder", { method: "POST" })}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
             </svg>
@@ -425,13 +346,7 @@ export default function App() {
       {showCategories && (
         <div className="modal-backdrop" onClick={() => setShowCategories(false)}>
           <div className="modal categories-modal" onClick={(e) => e.stopPropagation()}>
-            <CategoryManager
-              categories={categories}
-              catError={catError}
-              onAdd={handleAddCategory}
-              onRename={handleRenameCategory}
-              onDelete={handleDeleteCategory}
-            />
+            <CategoryManager categories={categories} />
             <div className="modal-actions">
               <button onClick={() => setShowCategories(false)}>Close</button>
             </div>
@@ -446,22 +361,13 @@ export default function App() {
         />
       )}
 
-      {showExport && (
-        <ExportModal
-          entries={entries}
-          categories={categories}
-          onClose={() => setShowExport(false)}
-        />
-      )}
-
       {showSettings && (
         <SettingsModal
           clipboardTemplate={clipboardTemplate}
-          exportTemplate={exportTemplate}
-          onSave={(ct, et) => {
+          dataDir={dataDir}
+          onSave={({ clipboardTemplate: ct, dataDir: dd }) => {
             setClipboardTemplate(ct);
-            setExportTemplateState(et);
-            setExportTemplate(et);
+            setDataDir(dd);
           }}
           onClose={() => setShowSettings(false)}
         />
