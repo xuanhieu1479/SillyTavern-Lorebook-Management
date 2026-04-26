@@ -19,12 +19,15 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
   const [category, setCategory] = useState("");
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  const debounceRef = useRef<number | null>(null);
+  const initialLoadRef = useRef(true);
 
   useImperativeHandle(ref, () => ({
     submit: () => formRef.current?.requestSubmit(),
   }));
 
   useEffect(() => {
+    initialLoadRef.current = true;
     if (editing) {
       setName(editing.name);
       setKeysInput(editing.keys.join(", "));
@@ -38,6 +41,25 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
     }
     setError("");
   }, [editing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => {
+      const trimmedName = name.trim();
+      const keys = keysInput.split(",").map((k) => k.trim()).filter(Boolean);
+      if (trimmedName && keys.length > 0 && category) {
+        onSave(trimmedName, keys, content, category);
+      }
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [editing, name, keysInput, content, category, onSave]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

@@ -32,6 +32,7 @@ export default function App() {
   const formRef = useRef<EntryFormHandle>(null);
   const undoLockRef = useRef(false);
   const highlightTimerRef = useRef<number | null>(null);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     if (!showCategories) return;
@@ -161,7 +162,6 @@ export default function App() {
   const filtered = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
 
   function handleSave(name: string, keys: string[], content: string, category: string) {
-    createSnapshot();
     if (editing) {
       const oldCategory = editing.category;
       setEntries((prev) => {
@@ -190,6 +190,7 @@ export default function App() {
         return next;
       });
     }
+    dirtyRef.current = true;
   }
 
   function handleDelete(id: string) {
@@ -203,8 +204,15 @@ export default function App() {
     if (editing?.id === id) setEditing(null);
   }
 
+  function handleEdit(entry: Entry) {
+    if (dirtyRef.current) {
+      createSnapshot();
+      dirtyRef.current = false;
+    }
+    setEditing(entry);
+  }
+
   function handleDuplicate(id: string) {
-    createSnapshot();
     const newId = generateId();
     setEntries((prev) => {
       const source = prev.find((e) => e.id === id);
@@ -232,7 +240,6 @@ export default function App() {
   }
 
   function handleMove(id: string, categoryId: string) {
-    createSnapshot();
     const entry = entries.find((e) => e.id === id);
     setEntries((prev) => {
       const next = prev.map((e) => (e.id === id ? { ...e, category: categoryId } : e));
@@ -249,18 +256,10 @@ export default function App() {
       <header>
         <h1>Lorebook Management</h1>
         <div className="header-actions">
-          <button className="header-btn header-submit" title={editing ? "Update" : "Add"} onClick={() => formRef.current?.submit()}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {editing
-                ? <><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></>
-                : <><path d="M12 5v14"/><path d="M5 12h14"/></>
-              }
-            </svg>
-          </button>
-          {editing && (
-            <button className="header-btn header-cancel" title="Cancel" onClick={() => setEditing(null)}>
+          {!editing && (
+            <button className="header-btn header-submit" title="Add" onClick={() => formRef.current?.submit()}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                <path d="M12 5v14"/><path d="M5 12h14"/>
               </svg>
             </button>
           )}
@@ -324,7 +323,7 @@ export default function App() {
           <EntryList
             entries={filtered}
             categories={categories}
-            onEdit={setEditing}
+            onEdit={handleEdit}
             onDelete={handleDelete}
             editingId={editing?.id ?? null}
             highlightId={highlightId}
