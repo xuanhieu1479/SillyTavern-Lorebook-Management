@@ -85,42 +85,46 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
 
   return (
     <form className="entry-form" ref={formRef} onSubmit={handleSubmit}>
-      <h2>{editing ? "Edit Entry" : "New Entry"}</h2>
       {error && <div className="form-error">{error}</div>}
-      <div className="form-field">
-        <label>Category *</label>
-        <select
-          className={category ? "" : "placeholder"}
-          value={category}
-          onChange={(e) => { setCategory(e.target.value); setError(""); }}
-          onKeyDown={handleCtrlEnter}
-        >
-          <option value="" disabled hidden>Select category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-      <div className="form-field">
-        <label>Name *</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => { setName(e.target.value); setError(""); }}
-          placeholder="Entry name"
-        />
-      </div>
-      <div className="form-field">
-        <label>Keys (comma-separated) *</label>
-        <input
-          type="text"
-          value={keysInput}
-          onChange={(e) => { setKeysInput(e.target.value); setError(""); }}
-          placeholder="key1, key2, key3"
-        />
+      <div className="form-row">
+        <div className="form-field">
+          <label>Category</label>
+          <select
+            className={category ? "" : "placeholder"}
+            value={category}
+            onChange={(e) => { setCategory(e.target.value); setError(""); }}
+            onKeyDown={handleCtrlEnter}
+          >
+            <option value="" disabled hidden>Select</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field form-field-grow">
+          <label>Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(""); }}
+            placeholder="Entry name"
+          />
+        </div>
+        <div className="form-field form-field-grow">
+          <label>Keys</label>
+          <input
+            type="text"
+            value={keysInput}
+            onChange={(e) => { setKeysInput(e.target.value); setError(""); }}
+            placeholder="key1, key2, key3"
+          />
+        </div>
       </div>
       <div className="form-field form-field-grow">
-        <label>Content</label>
+        <label className="label-with-meta">
+          <span>Content</span>
+          <span className="token-count">~{Math.ceil(content.length / 4)} tokens</span>
+        </label>
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}

@@ -8,6 +8,7 @@ import EntryList from "./EntryList";
 import CategoryManager from "./CategoryManager";
 import SettingsModal, { formatClipboard } from "./SettingsModal";
 import RestoreModal from "./RestoreModal";
+import { searchEntries, filterByCategory, type SearchMode } from "./search";
 import "./App.css";
 
 function generateId(): string {
@@ -18,6 +19,7 @@ export default function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
+  const [searchMode, setSearchMode] = useState<SearchMode>("name");
   const [filterCat, setFilterCat] = useState("");
   const [editing, setEditing] = useState<Entry | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -156,22 +158,7 @@ export default function App() {
     saveCategoryFile(name, catEntries, cat?.extras ?? {});
   }
 
-  const filtered = entries
-    .filter((e) => {
-      if (filterCat && e.category !== filterCat) return false;
-      if (!search.trim()) return true;
-      const terms: string[] = [];
-      const raw = search.toLowerCase();
-      const re = /"([^"]*)"|\S+/g;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(raw)) !== null) {
-        const t = (m[1] ?? m[0]).trim();
-        if (t) terms.push(t);
-      }
-      const name = e.name.toLowerCase();
-      return terms.some((q) => name.includes(q) || e.keys.some((k) => k.toLowerCase().includes(q)));
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
 
   function handleSave(name: string, keys: string[], content: string, category: string) {
     createSnapshot();
@@ -261,23 +248,78 @@ export default function App() {
     <div className="app">
       <header>
         <h1>Lorebook Management</h1>
+        <div className="header-actions">
+          <button className="header-btn header-submit" title={editing ? "Update" : "Add"} onClick={() => formRef.current?.submit()}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {editing
+                ? <><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></>
+                : <><path d="M12 5v14"/><path d="M5 12h14"/></>
+              }
+            </svg>
+          </button>
+          {editing && (
+            <button className="header-btn header-cancel" title="Cancel" onClick={() => setEditing(null)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+              </svg>
+            </button>
+          )}
+          <div className="header-divider" />
+          <button className="header-btn" title="Categories" onClick={() => setShowCategories(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
+          <button className="header-btn" title="Refresh" onClick={loadFromDisk}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/>
+            </svg>
+          </button>
+          <button className="header-btn" title="Settings" onClick={() => setShowSettings(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button className="header-btn" title="Open worlds folder" onClick={() => fetch("/api/open-folder", { method: "POST" })}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+          <button className="header-btn" title="Restore snapshot" onClick={() => setShowRestore(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><circle cx="12" cy="12" r="1"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <div className="main-layout">
         <div className="left-panel">
           <div className="filters">
-            <input
-              type="text"
-              placeholder="Search keys..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
-              <option value="">All categories</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <div className="filters-row">
+              <input
+                type="text"
+                placeholder="Search... (quotes for phrase, | for OR)"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="filters-row">
+              <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <label className="search-mode-toggle">
+                <input
+                  type="checkbox"
+                  checked={searchMode === "content"}
+                  onChange={(e) => setSearchMode(e.target.checked ? "content" : "name")}
+                />
+                <span className="toggle-label">{searchMode === "name" ? "Name" : "Content"}</span>
+              </label>
+            </div>
           </div>
           <EntryList
             entries={filtered}
@@ -304,53 +346,6 @@ export default function App() {
           />
         </div>
 
-        <div className="sidebar">
-          {/* Form actions */}
-          <button className="sidebar-btn sidebar-submit" title={editing ? "Update" : "Add"} onClick={() => formRef.current?.submit()}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {editing
-                ? <><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></>
-                : <><path d="M12 5v14"/><path d="M5 12h14"/></>
-              }
-            </svg>
-          </button>
-          {editing && (
-            <button className="sidebar-btn sidebar-cancel" title="Cancel" onClick={() => setEditing(null)}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-              </svg>
-            </button>
-          )}
-
-          <div className="sidebar-divider" />
-
-          {/* App actions */}
-          <button className="sidebar-btn" title="Categories" onClick={() => setShowCategories(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </button>
-          <button className="sidebar-btn" title="Refresh" onClick={loadFromDisk}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/>
-            </svg>
-          </button>
-          <button className="sidebar-btn" title="Settings" onClick={() => setShowSettings(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
-          <button className="sidebar-btn" title="Open worlds folder" onClick={() => fetch("/api/open-folder", { method: "POST" })}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
-          <button className="sidebar-btn" title="Restore snapshot" onClick={() => setShowRestore(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><circle cx="12" cy="12" r="1"/>
-            </svg>
-          </button>
-        </div>
       </div>
 
       {showCategories && (

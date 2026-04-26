@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Entry, Category } from "./types";
 import EntryActions from "./EntryActions";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 
 interface Props {
   entries: Entry[];

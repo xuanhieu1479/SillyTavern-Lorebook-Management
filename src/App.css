@@ -21,6 +21,52 @@ header h1 {
   color: var(--text-h);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.header-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.header-btn:hover {
+  background: var(--hover);
+}
+
+.header-submit {
+  color: var(--accent);
+}
+
+.header-cancel {
+  color: var(--danger);
+}
+
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
 /* Two-column layout — fills all available space */
 .main-layout {
   display: flex;
@@ -29,7 +75,7 @@ header h1 {
 }
 
 .left-panel {
-  width: 360px;
+  width: 30%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -44,9 +90,10 @@ header h1 {
   min-height: 0;
 }
 
-/* Filters — compact bar */
+/* Filters — two-row layout */
 .filters {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   flex-shrink: 0;
   padding: 10px 12px;
@@ -54,13 +101,43 @@ header h1 {
   background: var(--surface);
 }
 
-.filters input {
+.filters-row {
+  display: flex;
+  gap: 8px;
+}
+
+.filters-row input {
   flex: 1;
 }
 
-.filters select {
-  width: 170px;
+.filters-row select {
+  flex: 1;
+}
+
+.search-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
   flex-shrink: 0;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+  user-select: none;
+}
+
+.search-mode-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.search-mode-toggle .toggle-label {
+  min-width: 50px;
 }
 
 /* Entry form — takes up most of the right panel */
@@ -73,16 +150,15 @@ header h1 {
   min-height: 0;
 }
 
-.entry-form h2 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-h);
-  flex-shrink: 0;
-}
-
 .form-error {
   font-size: 14px;
   color: var(--danger);
+  flex-shrink: 0;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -97,6 +173,18 @@ header h1 {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-h);
+}
+
+.label-with-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.token-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text);
 }
 
 .form-field-grow {
@@ -671,59 +759,6 @@ header h1 {
 
 .modal-actions .btn-cancel:hover {
   background: var(--danger-hover);
-}
-
-/* Sidebar */
-.sidebar {
-  width: 48px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 0;
-  border-left: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.sidebar-btn {
-  background: transparent;
-  color: var(--text);
-  padding: 8px;
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.sidebar-btn:hover {
-  background: var(--border);
-  color: var(--text-h);
-}
-
-.sidebar-submit {
-  color: var(--accent);
-}
-
-.sidebar-submit:hover {
-  background: var(--accent);
-  color: white;
-}
-
-.sidebar-cancel {
-  color: var(--danger);
-}
-
-.sidebar-cancel:hover {
-  background: var(--danger);
-  color: white;
-}
-
-.sidebar-divider {
-  width: 28px;
-  height: 1px;
-  background: var(--border);
-  margin: 4px 0;
 }
 
 /* Toast notification */
