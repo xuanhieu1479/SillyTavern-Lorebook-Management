@@ -20,14 +20,12 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const debounceRef = useRef<number | null>(null);
-  const initialLoadRef = useRef(true);
 
   useImperativeHandle(ref, () => ({
     submit: () => formRef.current?.requestSubmit(),
   }));
 
   useEffect(() => {
-    initialLoadRef.current = true;
     if (editing) {
       setName(editing.name);
       setKeysInput(editing.keys.join(", "));
@@ -44,8 +42,9 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
 
   useEffect(() => {
     if (!editing) return;
-    if (initialLoadRef.current) {
-      initialLoadRef.current = false;
+    // Don't auto-save if form values match the editing entry (just loaded, no user changes)
+    const loadedKeys = editing.keys.join(", ");
+    if (name === editing.name && keysInput === loadedKeys && content === editing.content && category === editing.category) {
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);

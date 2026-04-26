@@ -75,7 +75,7 @@ header h1 {
 }
 
 .left-panel {
-  width: 30%;
+  width: 25%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

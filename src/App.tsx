@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Entry, Category } from "./types";
-import { saveEntries, saveCategories } from "./store";
 import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, createSnapshot, restoreSnapshot, getCurrentSnapshot, restoreRawSnapshot, savePreviousSnapshot, loadPreviousSnapshot, clearPreviousSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
@@ -148,8 +147,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleRedo);
   }, [loadFromDisk]);
 
-  useEffect(() => { saveEntries(entries); }, [entries]);
-  useEffect(() => { saveCategories(categories); }, [categories]);
 
   function syncCategoryToDisk(catId: string, allEntries: Entry[], catName?: string) {
     const cat = categories.find((c) => c.id === catId);
@@ -164,15 +161,16 @@ export default function App() {
   function handleSave(name: string, keys: string[], content: string, category: string) {
     if (editing) {
       const oldCategory = editing.category;
+      const updatedEntry = { ...editing, name, keys, content, category };
       setEntries((prev) => {
-        const next = prev.map((e) => (e.id === editing.id ? { ...e, name, keys, content, category } : e));
+        const next = prev.map((e) => (e.id === editing.id ? updatedEntry : e));
         syncCategoryToDisk(category, next);
         if (oldCategory !== category) {
           syncCategoryToDisk(oldCategory, next);
         }
         return next;
       });
-      setEditing(null);
+      setEditing(updatedEntry);
     } else {
       setEntries((prev) => {
         const siblings = prev.filter((e) => e.category === category);
