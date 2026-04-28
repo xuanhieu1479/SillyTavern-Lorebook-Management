@@ -14,6 +14,20 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
+const FAVORITES_KEY = "lorebook-favorites";
+const MAX_FAVORITES = 3;
+
+function loadFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveFavorites(names: string[]): void {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(names));
+}
+
 export default function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,10 +42,29 @@ export default function App() {
   const [dataDir, setDataDir] = useState("");
   const [notification, setNotification] = useState<{ message: string; type: "error" | "info" } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<string[]>(loadFavorites);
   const formRef = useRef<EntryFormHandle>(null);
   const undoLockRef = useRef(false);
   const highlightTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef(false);
+
+  function toggleFavorite(name: string) {
+    setFavorites((prev) => {
+      if (prev.includes(name)) {
+        const next = prev.filter((f) => f !== name);
+        saveFavorites(next);
+        return next;
+      }
+      if (prev.length >= MAX_FAVORITES) {
+        setNotification({ message: `Maximum ${MAX_FAVORITES} favorites allowed.`, type: "error" });
+        setTimeout(() => setNotification(null), 3000);
+        return prev;
+      }
+      const next = [...prev, name];
+      saveFavorites(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!showCategories) return;
@@ -252,7 +285,30 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>Lorebook Management</h1>
+        <div className="header-left">
+          <h1>Lorebook Management</h1>
+          {favorites.length > 0 && (
+            <div className="favorite-tags">
+              {favorites.map((fname) => {
+                const entry = entries.find((e) => e.name === fname);
+                if (!entry) return null;
+                const displayName = fname.includes("-")
+                  ? fname.split("-").pop()!.trim()
+                  : fname;
+                return (
+                  <button
+                    key={fname}
+                    className="favorite-tag"
+                    onClick={() => handleEdit(entry)}
+                    title={fname}
+                  >
+                    {displayName}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <div className="header-actions">
           {!editing && (
             <button className="header-btn header-submit" title="Add" onClick={() => formRef.current?.submit()}>
@@ -340,6 +396,8 @@ export default function App() {
             categories={categories}
             onSave={handleSave}
             onCancel={() => setEditing(null)}
+            isFavorite={editing ? favorites.includes(editing.name) : false}
+            onToggleFavorite={editing ? () => toggleFavorite(editing.name) : undefined}
           />
         </div>
 

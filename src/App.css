@@ -21,6 +21,40 @@ header h1 {
   color: var(--text-h);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.favorite-tags {
+  display: flex;
+  gap: 6px;
+}
+
+.favorite-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.favorite-tag:hover {
+  background: var(--accent);
+  color: white;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -178,7 +212,42 @@ header h1 {
 .label-with-meta {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+}
+
+.label-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-favorite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent !important;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: color 0.15s, filter 0.15s;
+}
+
+.btn-favorite:hover {
+  background: transparent !important;
+  color: #f5c518;
+  filter: drop-shadow(0 0 4px rgba(245, 197, 24, 0.6));
+}
+
+.btn-favorite.favorited {
+  color: #f5c518;
+}
+
+.btn-favorite.favorited:hover {
+  background: transparent !important;
+  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.8));
 }
 
 .token-count {

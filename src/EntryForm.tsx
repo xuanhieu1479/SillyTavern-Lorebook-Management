@@ -6,13 +6,15 @@ interface Props {
   categories: Category[];
   onSave: (name: string, keys: string[], content: string, category: string) => void;
   onCancel: () => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 export interface EntryFormHandle {
   submit: () => void;
 }
 
-const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onSave, onCancel }, ref) => {
+const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onSave, onCancel, isFavorite, onToggleFavorite }, ref) => {
   const [name, setName] = useState("");
   const [keysInput, setKeysInput] = useState("");
   const [content, setContent] = useState("");
@@ -54,7 +56,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
       if (trimmedName && keys.length > 0 && category) {
         onSave(trimmedName, keys, content, category);
       }
-    }, 500);
+    }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -142,10 +144,24 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
         </div>
       </div>
       <div className="form-field form-field-grow">
-        <label className="label-with-meta">
-          <span>Content</span>
+        <div className="label-with-meta">
+          <span className="label-left">
+            <label>Content</label>
+            {editing && onToggleFavorite && (
+              <button
+                type="button"
+                className={`btn-favorite ${isFavorite ? "favorited" : ""}`}
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </button>
+            )}
+          </span>
           <span className="token-count">~{Math.ceil(content.length / 4)} tokens</span>
-        </label>
+        </div>
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
