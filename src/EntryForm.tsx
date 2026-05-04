@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import type { Entry, Category } from "./types";
+import { getHighlightRanges, type SearchMode } from "./search";
 
 interface Props {
   editing: Entry | null;
@@ -8,19 +9,23 @@ interface Props {
   onCancel: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  searchQuery?: string;
+  searchMode?: SearchMode;
 }
 
 export interface EntryFormHandle {
   submit: () => void;
 }
 
-const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onSave, onCancel, isFavorite, onToggleFavorite }, ref) => {
+const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onSave, onCancel, isFavorite, onToggleFavorite, searchQuery, searchMode }, ref) => {
   const [name, setName] = useState("");
   const [keysInput, setKeysInput] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<number | null>(null);
 
   useImperativeHandle(ref, () => ({
@@ -71,6 +76,37 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editing, onCancel]);
+
+  const handleScroll = () => {
+    if (textareaRef.current && backdropRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  };
+
+  const showHighlights = searchMode === "content" && searchQuery && editing;
+  const highlightRanges = showHighlights ? getHighlightRanges(content, searchQuery) : [];
+
+  function buildHighlightedContent(): React.ReactNode[] {
+    if (highlightRanges.length === 0) {
+      return [content + "\n"];
+    }
+    const parts: React.ReactNode[] = [];
+    let lastEnd = 0;
+    for (let i = 0; i < highlightRanges.length; i++) {
+      const [start, end] = highlightRanges[i];
+      if (start > lastEnd) {
+        parts.push(content.slice(lastEnd, start));
+      }
+      parts.push(<mark key={i}>{content.slice(start, end)}</mark>);
+      lastEnd = end;
+    }
+    if (lastEnd < content.length) {
+      parts.push(content.slice(lastEnd));
+    }
+    parts.push("\n");
+    return parts;
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -162,12 +198,22 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
           </span>
           <span className="token-count">~{Math.ceil(content.length / 4)} tokens</span>
         </div>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleCtrlEnter}
-          placeholder="Entry content..."
-        />
+        <div className="textarea-highlight-container">
+          {showHighlights && (
+            <div className="textarea-backdrop" ref={backdropRef}>
+              {buildHighlightedContent()}
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            className={showHighlights ? "with-highlights" : ""}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={handleCtrlEnter}
+            onScroll={handleScroll}
+            placeholder="Entry content..."
+          />
+        </div>
       </div>
     </form>
   );

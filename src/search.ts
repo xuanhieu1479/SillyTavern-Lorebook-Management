@@ -253,3 +253,44 @@ export function filterByCategory(entries: Entry[], categoryId: string): Entry[] 
   if (!categoryId) return entries;
   return entries.filter((e) => e.category === categoryId);
 }
+
+export function getHighlightRanges(text: string, query: string): Array<[number, number]> {
+  const parsed = parseQuery(query);
+  if (parsed.terms.length === 0) return [];
+
+  const ranges: Array<[number, number]> = [];
+  const lower = text.toLowerCase();
+
+  for (const term of parsed.terms) {
+    if (term.type === "phrase") {
+      let idx = 0;
+      while ((idx = lower.indexOf(term.value, idx)) !== -1) {
+        ranges.push([idx, idx + term.value.length]);
+        idx += 1;
+      }
+    } else {
+      for (const token of term.tokens) {
+        const regex = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\w*`, "gi");
+        let match: RegExpExecArray | null;
+        while ((match = regex.exec(text)) !== null) {
+          ranges.push([match.index, match.index + match[0].length]);
+        }
+      }
+    }
+  }
+
+  if (ranges.length === 0) return [];
+
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: Array<[number, number]> = [ranges[0]];
+  for (let i = 1; i < ranges.length; i++) {
+    const last = merged[merged.length - 1];
+    if (ranges[i][0] <= last[1]) {
+      last[1] = Math.max(last[1], ranges[i][1]);
+    } else {
+      merged.push(ranges[i]);
+    }
+  }
+
+  return merged;
+}

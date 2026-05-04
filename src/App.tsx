@@ -76,9 +76,11 @@ export default function App() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>(loadFavorites);
   const formRef = useRef<EntryFormHandle>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const undoLockRef = useRef(false);
   const highlightTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef(false);
+  const lastCtrlFRef = useRef(0);
 
   function toggleFavorite(name: string) {
     setFavorites((prev) => {
@@ -206,6 +208,26 @@ export default function App() {
     window.addEventListener("keydown", handleRedo);
     return () => window.removeEventListener("keydown", handleRedo);
   }, [loadFromDisk]);
+
+  // Ctrl+F to focus search; Ctrl+F+F (within 500ms) for browser search
+  useEffect(() => {
+    function handleCtrlF(e: KeyboardEvent) {
+      if (e.key !== "f" || !e.ctrlKey || e.shiftKey || e.altKey) return;
+
+      const now = Date.now();
+      if (now - lastCtrlFRef.current < 500) {
+        lastCtrlFRef.current = 0;
+        return;
+      }
+
+      e.preventDefault();
+      lastCtrlFRef.current = now;
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+    window.addEventListener("keydown", handleCtrlF);
+    return () => window.removeEventListener("keydown", handleCtrlF);
+  }, []);
 
 
   function syncCategoryToDisk(catId: string, allEntries: Entry[], catName?: string) {
@@ -379,6 +401,7 @@ export default function App() {
             <div className="filters-row">
               <div className="search-input-wrapper">
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Search... (quotes for phrase, | for OR)"
                   value={search}
@@ -440,6 +463,8 @@ export default function App() {
             onCancel={() => setEditing(null)}
             isFavorite={editing ? favorites.includes(editing.name) : false}
             onToggleFavorite={editing ? () => toggleFavorite(editing.name) : undefined}
+            searchQuery={search}
+            searchMode={searchMode}
           />
         </div>
 
