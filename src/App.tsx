@@ -1,5 +1,38 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import type { Entry, Category } from "./types";
+
+const MAX_TOASTS = 3;
+const toastQueue: string[] = [];
+const TOAST_COLORS = [
+  "#6366f1", // indigo
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+  "#f59e0b", // amber
+  "#10b981", // emerald
+  "#06b6d4", // cyan
+];
+let colorIndex = 0;
+
+function showToast(message: string, type: "success" | "error") {
+  if (toastQueue.length >= MAX_TOASTS) {
+    const oldest = toastQueue.shift();
+    if (oldest) toast.dismiss(oldest);
+  }
+
+  if (type === "error") {
+    const id = toast.error(message);
+    toastQueue.push(id);
+  } else {
+    const color = TOAST_COLORS[colorIndex % TOAST_COLORS.length];
+    colorIndex++;
+    const id = toast.success(message, {
+      iconTheme: { primary: color, secondary: "white" },
+      style: { borderLeft: `4px solid ${color}` },
+    });
+    toastQueue.push(id);
+  }
+}
 import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, createSnapshot, restoreSnapshot, getCurrentSnapshot, restoreRawSnapshot, savePreviousSnapshot, loadPreviousSnapshot, clearPreviousSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
@@ -40,7 +73,6 @@ export default function App() {
   const [showRestore, setShowRestore] = useState(false);
   const [clipboardTemplate, setClipboardTemplate] = useState("{{content}}");
   const [dataDir, setDataDir] = useState("");
-  const [notification, setNotification] = useState<{ message: string; type: "error" | "info" } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>(loadFavorites);
   const formRef = useRef<EntryFormHandle>(null);
@@ -56,8 +88,7 @@ export default function App() {
         return next;
       }
       if (prev.length >= MAX_FAVORITES) {
-        setNotification({ message: `Maximum ${MAX_FAVORITES} favorites allowed.`, type: "error" });
-        setTimeout(() => setNotification(null), 3000);
+        showToast(`Maximum ${MAX_FAVORITES} favorites allowed.`, "error");
         return prev;
       }
       const next = [...prev, name];
@@ -134,17 +165,15 @@ export default function App() {
         savePreviousSnapshot(current);
         const result = await restoreSnapshot(snapshotName);
         if (result.error) {
-          setNotification({ message: result.error, type: "error" });
+          showToast(result.error, "error");
         } else {
-          setNotification({ message: `Restored: ${result.restored}`, type: "info" });
+          showToast(`Restored: ${result.restored}`, "success");
           await saveSettings({ latestSnapshot: null });
           await loadFromDisk();
         }
       } catch {
-        setNotification({ message: "Failed to restore snapshot.", type: "error" });
+        showToast("Failed to restore snapshot.", "error");
       }
-
-      setTimeout(() => setNotification(null), 3000);
     }
     window.addEventListener("keydown", handleUndo);
     return () => window.removeEventListener("keydown", handleUndo);
@@ -168,13 +197,11 @@ export default function App() {
       try {
         await restoreRawSnapshot(prev);
         clearPreviousSnapshot();
-        setNotification({ message: "Redo: restored previous state.", type: "info" });
+        showToast("Redo: restored previous state.", "success");
         await loadFromDisk();
       } catch {
-        setNotification({ message: "Failed to redo.", type: "error" });
+        showToast("Failed to redo.", "error");
       }
-
-      setTimeout(() => setNotification(null), 3000);
     }
     window.addEventListener("keydown", handleRedo);
     return () => window.removeEventListener("keydown", handleRedo);
@@ -350,12 +377,26 @@ export default function App() {
         <div className="left-panel">
           <div className="filters">
             <div className="filters-row">
-              <input
-                type="text"
-                placeholder="Search... (quotes for phrase, | for OR)"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  placeholder="Search... (quotes for phrase, | for OR)"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {search && (
+                  <button
+                    className="search-clear-btn"
+                    onClick={() => setSearch("")}
+                    type="button"
+                    title="Clear search"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
             <div className="filters-row">
               <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
@@ -385,6 +426,7 @@ export default function App() {
             onMove={handleMove}
             onCopy={(content) => {
               navigator.clipboard.writeText(formatClipboard(clipboardTemplate, content));
+              showToast("Copied to clipboard", "success");
             }}
           />
         </div>
@@ -440,11 +482,24 @@ export default function App() {
         />
       )}
 
-      {notification && (
-        <div className={`toast toast-${notification.type}`}>
-          {notification.message}
-        </div>
-      )}
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 2000,
+          style: {
+            background: "var(--surface)",
+            color: "var(--text-h)",
+            border: "1px solid var(--border)",
+          },
+          success: {
+            iconTheme: { primary: "var(--accent)", secondary: "white" },
+          },
+          error: {
+            iconTheme: { primary: "var(--danger)", secondary: "white" },
+          },
+        }}
+        containerStyle={{ top: 20 }}
+      />
     </div>
   );
 }

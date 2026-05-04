@@ -4,12 +4,14 @@ import type { Entry, Category } from "./types";
 interface Props {
   entry: Entry;
   categories: Category[];
+  onCopy: (content: string) => void;
+  onEdit: () => void;
   onDuplicate: (id: string) => void;
   onMove: (id: string, categoryId: string) => void;
   onDelete: (id: string) => void;
 }
 
-export default function EntryActions({ entry, categories, onDuplicate, onMove, onDelete }: Props) {
+export default function EntryActions({ entry, categories, onCopy, onEdit, onDuplicate, onMove, onDelete }: Props) {
   const [moveOpen, setMoveOpen] = useState(false);
   const moveRef = useRef<HTMLDivElement>(null);
 
@@ -28,6 +30,17 @@ export default function EntryActions({ entry, categories, onDuplicate, onMove, o
 
   return (
     <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+      {/* Copy */}
+      <button
+        className="btn-icon btn-copy"
+        title="Copy to clipboard"
+        onClick={() => { onCopy(entry.content); onEdit(); }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>
       {/* Duplicate */}
       <button
         className="btn-icon btn-duplicate"
@@ -37,6 +50,7 @@ export default function EntryActions({ entry, categories, onDuplicate, onMove, o
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2"/>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          <path d="M12 17v-4"/><path d="M14 15h-4"/>
         </svg>
       </button>
       {/* Move */}

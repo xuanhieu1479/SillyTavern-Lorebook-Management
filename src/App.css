@@ -144,6 +144,41 @@ header h1 {
   flex: 1;
 }
 
+.search-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+}
+
+.search-input-wrapper input {
+  flex: 1;
+  padding-right: 30px;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.search-clear-btn:hover {
+  color: var(--text-h);
+  background: var(--border);
+}
+
 .filters-row select {
   flex: 1;
 }
@@ -395,6 +430,10 @@ header h1 {
 
 .btn-icon:hover {
   background: var(--border);
+}
+
+.btn-icon.btn-copy:hover {
+  color: var(--accent);
 }
 
 .btn-icon.btn-duplicate:hover {
@@ -830,34 +869,6 @@ header h1 {
   background: var(--danger-hover);
 }
 
-/* Toast notification */
-.toast {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 20px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 500;
-  color: white;
-  z-index: 200;
-  pointer-events: none;
-  animation: toast-in 0.2s ease;
-}
-
-.toast-info {
-  background: var(--accent);
-}
-
-.toast-error {
-  background: var(--danger);
-}
-
-@keyframes toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
 
 /* Responsive */
 @media (max-width: 860px) {

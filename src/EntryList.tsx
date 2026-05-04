@@ -43,7 +43,7 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
           <div
             key={entry.id}
             className={`entry-card${editingId === entry.id ? " selected" : ""}${highlightId === entry.id ? " highlight-new" : ""}`}
-            onClick={() => { onEdit(entry); onCopy(entry.content); }}
+            onClick={() => onEdit(entry)}
           >
             <div className="entry-card-name">{entry.name}</div>
             <div className="entry-card-row">
@@ -55,6 +55,8 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
               <EntryActions
                 entry={entry}
                 categories={categories}
+                onCopy={onCopy}
+                onEdit={() => onEdit(entry)}
                 onDuplicate={onDuplicate}
                 onMove={onMove}
                 onDelete={onDelete}
