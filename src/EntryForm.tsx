@@ -49,7 +49,6 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
 
   useEffect(() => {
     if (!editing) return;
-    // Don't auto-save if form values match the editing entry (just loaded, no user changes)
     const loadedKeys = editing.keys.join(", ");
     if (name === editing.name && keysInput === loadedKeys && content === editing.content && category === editing.category) {
       return;
@@ -58,7 +57,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
     debounceRef.current = window.setTimeout(() => {
       const trimmedName = name.trim();
       const keys = keysInput.split(",").map((k) => k.trim()).filter(Boolean);
-      if (trimmedName && keys.length > 0 && category) {
+      if (trimmedName && category) {
         onSave(trimmedName, keys, content, category);
       }
     }, 1000);
@@ -118,10 +117,6 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
       .split(",")
       .map((k) => k.trim())
       .filter(Boolean);
-    if (keys.length === 0) {
-      setError("At least one key is required.");
-      return;
-    }
     if (!category) {
       setError("Please select a category.");
       return;

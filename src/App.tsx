@@ -240,7 +240,7 @@ export default function App() {
 
   const filtered = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
 
-  function handleSave(name: string, keys: string[], content: string, category: string) {
+  const handleSave = useCallback((name: string, keys: string[], content: string, category: string) => {
     if (editing) {
       const oldCategory = editing.category;
       const updatedEntry = { ...editing, name, keys, content, category };
@@ -271,7 +271,7 @@ export default function App() {
       });
     }
     dirtyRef.current = true;
-  }
+  }, [editing, categories]);
 
   function handleDelete(id: string) {
     createSnapshot();
