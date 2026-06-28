@@ -144,6 +144,7 @@ export interface AppSettings {
   clipboardTemplate?: string;
   dataDir?: string;
   latestSnapshot?: string | null;
+  maxBackups?: number;
 }
 
 export async function createSnapshot(): Promise<void> {

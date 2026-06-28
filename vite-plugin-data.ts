@@ -96,6 +96,19 @@ export default function dataPlugin(): Plugin {
           const settings = readSettings();
           settings.latestSnapshot = name;
           fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
+
+          // Enforce backup cap
+          const maxBackups = typeof settings.maxBackups === "number" && settings.maxBackups > 0 ? settings.maxBackups : 100;
+          const allBackups = fs.readdirSync(BACKUP_DIR)
+            .filter((f) => f.startsWith("Snapshot-") && f.endsWith(".json"))
+            .sort();
+          if (allBackups.length > maxBackups) {
+            const toDelete = allBackups.slice(0, allBackups.length - maxBackups);
+            for (const old of toDelete) {
+              fs.unlinkSync(path.join(BACKUP_DIR, old));
+            }
+          }
+
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify({ ok: true, name }));
         } catch (err) {

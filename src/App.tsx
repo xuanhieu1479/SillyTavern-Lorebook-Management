@@ -33,12 +33,13 @@ function showToast(message: string, type: "success" | "error") {
     toastQueue.push(id);
   }
 }
-import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, createSnapshot, restoreSnapshot, getCurrentSnapshot, restoreRawSnapshot, savePreviousSnapshot, loadPreviousSnapshot, clearPreviousSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
+import { saveCategoryFile, loadAllFromDisk, loadSettings, createSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
 import CategoryManager from "./CategoryManager";
-import SettingsModal, { formatClipboard } from "./SettingsModal";
+import SettingsModal from "./SettingsModal";
+import { formatClipboard } from "./clipboard";
 import RestoreModal from "./RestoreModal";
 import { searchEntries, filterByCategory, type SearchMode } from "./search";
 import "./App.css";
@@ -77,7 +78,6 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>(loadFavorites);
   const formRef = useRef<EntryFormHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const undoLockRef = useRef(false);
   const highlightTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef(false);
   const lastCtrlFRef = useRef(0);
@@ -144,69 +144,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial data load on mount
     loadFromDisk();
-  }, [loadFromDisk]);
-
-  // Ctrl+Z to restore latest snapshot (2s debounce, disabled when input focused)
-  useEffect(() => {
-    async function handleUndo(e: KeyboardEvent) {
-      if (e.key !== "z" || !e.ctrlKey || e.shiftKey || e.altKey) return;
-      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      if (undoLockRef.current) return;
-
-      e.preventDefault();
-      undoLockRef.current = true;
-      setTimeout(() => { undoLockRef.current = false; }, 2000);
-
-      try {
-        const settings = await loadSettings();
-        const snapshotName = settings.latestSnapshot;
-        if (!snapshotName) return;
-        const current = await getCurrentSnapshot();
-        savePreviousSnapshot(current);
-        const result = await restoreSnapshot(snapshotName);
-        if (result.error) {
-          showToast(result.error, "error");
-        } else {
-          showToast(`Restored: ${result.restored}`, "success");
-          await saveSettings({ latestSnapshot: null });
-          await loadFromDisk();
-        }
-      } catch {
-        showToast("Failed to restore snapshot.", "error");
-      }
-    }
-    window.addEventListener("keydown", handleUndo);
-    return () => window.removeEventListener("keydown", handleUndo);
-  }, [loadFromDisk]);
-
-  // Ctrl+Y to redo (restore previousSnapshot from localStorage)
-  useEffect(() => {
-    async function handleRedo(e: KeyboardEvent) {
-      if (e.key !== "y" || !e.ctrlKey || e.shiftKey || e.altKey) return;
-      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      if (undoLockRef.current) return;
-
-      e.preventDefault();
-      undoLockRef.current = true;
-      setTimeout(() => { undoLockRef.current = false; }, 2000);
-
-      const prev = loadPreviousSnapshot();
-      if (!prev) return;
-
-      try {
-        await restoreRawSnapshot(prev);
-        clearPreviousSnapshot();
-        showToast("Redo: restored previous state.", "success");
-        await loadFromDisk();
-      } catch {
-        showToast("Failed to redo.", "error");
-      }
-    }
-    window.addEventListener("keydown", handleRedo);
-    return () => window.removeEventListener("keydown", handleRedo);
   }, [loadFromDisk]);
 
   // Ctrl+F to focus search; Ctrl+F+F (within 500ms) for browser search
@@ -230,13 +169,13 @@ export default function App() {
   }, []);
 
 
-  function syncCategoryToDisk(catId: string, allEntries: Entry[], catName?: string) {
+  const syncCategoryToDisk = useCallback((catId: string, allEntries: Entry[], catName?: string) => {
     const cat = categories.find((c) => c.id === catId);
     const name = catName ?? cat?.name;
     if (!name) return;
     const catEntries = allEntries.filter((e) => e.category === catId);
     saveCategoryFile(name, catEntries, cat?.extras ?? {});
-  }
+  }, [categories]);
 
   const filtered = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
 
@@ -271,7 +210,7 @@ export default function App() {
       });
     }
     dirtyRef.current = true;
-  }, [editing, categories]);
+  }, [editing, syncCategoryToDisk]);
 
   function handleDelete(id: string) {
     createSnapshot();

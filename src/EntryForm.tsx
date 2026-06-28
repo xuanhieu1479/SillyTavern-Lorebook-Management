@@ -34,6 +34,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
 
   useEffect(() => {
     if (editing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync form state when editing prop changes
       setName(editing.name);
       setKeysInput(editing.keys.join(", "));
       setContent(editing.content);

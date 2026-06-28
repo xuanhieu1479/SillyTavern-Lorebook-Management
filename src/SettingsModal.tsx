@@ -1,14 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { saveSettings } from "./api";
-
-const DEFAULT_TEMPLATE = "{{content}}";
-
-export function formatClipboard(template: string, content: string): string {
-  if (template.includes("{{content}}")) {
-    return template.replaceAll("{{content}}", content);
-  }
-  return template;
-}
+import { DEFAULT_TEMPLATE, formatClipboard } from "./clipboard";
 
 interface Props {
   clipboardTemplate: string;
@@ -24,6 +16,13 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
   const [dataDirInput, setDataDirInput] = useState(dataDir);
   const [template, setTemplate] = useState(clipboardTemplate || DEFAULT_TEMPLATE);
 
+  const handleSave = useCallback(() => {
+    const trimmedDir = dataDirInput.trim();
+    saveSettings({ clipboardTemplate: template, dataDir: trimmedDir });
+    onSave({ clipboardTemplate: template, dataDir: trimmedDir });
+    onClose();
+  }, [dataDirInput, template, onSave, onClose]);
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -34,14 +33,7 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose, template, dataDirInput]);
-
-  function handleSave() {
-    const trimmedDir = dataDirInput.trim();
-    saveSettings({ clipboardTemplate: template, dataDir: trimmedDir });
-    onSave({ clipboardTemplate: template, dataDir: trimmedDir });
-    onClose();
-  }
+  }, [onClose, handleSave]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
