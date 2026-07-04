@@ -421,12 +421,12 @@ header h1 {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-h);
-  margin-bottom: 6px;
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .entry-card-row {
@@ -489,6 +489,61 @@ header h1 {
 
 .btn-icon.btn-delete:hover {
   color: var(--danger);
+}
+
+/* Entry disabled state */
+.entry-card.entry-disabled {
+  opacity: 0.5;
+}
+
+.entry-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* Toggle switch */
+.entry-toggle {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.entry-toggle:hover {
+  background: transparent;
+}
+
+.toggle-track {
+  display: block;
+  width: 28px;
+  height: 16px;
+  background: var(--border);
+  border-radius: 8px;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.entry-toggle.active .toggle-track {
+  background: var(--accent);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+
+.entry-toggle.active .toggle-thumb {
+  transform: translateX(12px);
 }
 
 .dropdown-anchor {

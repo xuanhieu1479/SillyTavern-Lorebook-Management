@@ -270,6 +270,22 @@ export default function App() {
     });
   }
 
+  function handleToggleDisabled(id: string) {
+    setEntries((prev) => {
+      const entry = prev.find((e) => e.id === id);
+      if (!entry) return prev;
+      const raw = (entry.extra?._raw ?? {}) as Record<string, unknown>;
+      const newDisabled = !raw.disabled;
+      const updatedEntry: Entry = {
+        ...entry,
+        extra: { ...entry.extra, _raw: { ...raw, disabled: newDisabled } },
+      };
+      const next = prev.map((e) => (e.id === id ? updatedEntry : e));
+      syncCategoryToDisk(entry.category, next);
+      return next;
+    });
+  }
+
   return (
     <div className="app">
       <header>
@@ -390,6 +406,7 @@ export default function App() {
               navigator.clipboard.writeText(formatClipboard(clipboardTemplate, content));
               showToast("Copied to clipboard", "success");
             }}
+            onToggleDisabled={handleToggleDisabled}
           />
         </div>
 

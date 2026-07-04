@@ -14,9 +14,10 @@ interface Props {
   onDuplicate: (id: string) => void;
   onMove: (id: string, categoryId: string) => void;
   onCopy: (content: string) => void;
+  onToggleDisabled: (id: string) => void;
 }
 
-export default function EntryList({ entries, categories, onEdit, onDelete, editingId, highlightId, onDuplicate, onMove, onCopy }: Props) {
+export default function EntryList({ entries, categories, onEdit, onDelete, editingId, highlightId, onDuplicate, onMove, onCopy, onToggleDisabled }: Props) {
   const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
@@ -39,31 +40,48 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
         )}
       </div>
       <div className="entry-list">
-        {paged.map((entry) => (
-          <div
-            key={entry.id}
-            className={`entry-card${editingId === entry.id ? " selected" : ""}${highlightId === entry.id ? " highlight-new" : ""}`}
-            onClick={() => onEdit(entry)}
-          >
-            <div className="entry-card-name">{entry.name}</div>
-            <div className="entry-card-row">
-              <div className="entry-keys">
-                {entry.keys.map((k, i) => (
-                  <span key={i} className="key-tag">{k}</span>
-                ))}
+        {paged.map((entry) => {
+          const isDisabled = Boolean((entry.extra?._raw as Record<string, unknown> | undefined)?.disabled);
+          return (
+            <div
+              key={entry.id}
+              className={`entry-card${editingId === entry.id ? " selected" : ""}${highlightId === entry.id ? " highlight-new" : ""}${isDisabled ? " entry-disabled" : ""}`}
+              onClick={() => onEdit(entry)}
+            >
+              <div className="entry-card-header">
+                <div className="entry-card-name">{entry.name}</div>
+                <button
+                  className={`entry-toggle${isDisabled ? "" : " active"}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleDisabled(entry.id);
+                  }}
+                  title={isDisabled ? "Enable entry" : "Disable entry"}
+                >
+                  <span className="toggle-track">
+                    <span className="toggle-thumb" />
+                  </span>
+                </button>
               </div>
-              <EntryActions
-                entry={entry}
-                categories={categories}
-                onCopy={onCopy}
-                onEdit={() => onEdit(entry)}
-                onDuplicate={onDuplicate}
-                onMove={onMove}
-                onDelete={onDelete}
-              />
+              <div className="entry-card-row">
+                <div className="entry-keys">
+                  {entry.keys.map((k, i) => (
+                    <span key={i} className="key-tag">{k}</span>
+                  ))}
+                </div>
+                <EntryActions
+                  entry={entry}
+                  categories={categories}
+                  onCopy={onCopy}
+                  onEdit={() => onEdit(entry)}
+                  onDuplicate={onDuplicate}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
     </div>
