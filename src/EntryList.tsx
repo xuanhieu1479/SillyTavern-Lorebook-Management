@@ -41,7 +41,7 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
       </div>
       <div className="entry-list">
         {paged.map((entry) => {
-          const isDisabled = Boolean((entry.extra?._raw as Record<string, unknown> | undefined)?.disabled);
+          const isDisabled = Boolean((entry.extra?._raw as Record<string, unknown> | undefined)?.disable);
           return (
             <div
               key={entry.id}

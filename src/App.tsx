@@ -275,10 +275,10 @@ export default function App() {
       const entry = prev.find((e) => e.id === id);
       if (!entry) return prev;
       const raw = (entry.extra?._raw ?? {}) as Record<string, unknown>;
-      const newDisabled = !raw.disabled;
+      const newDisabled = !raw.disable;
       const updatedEntry: Entry = {
         ...entry,
-        extra: { ...entry.extra, _raw: { ...raw, disabled: newDisabled } },
+        extra: { ...entry.extra, _raw: { ...raw, disable: newDisabled } },
       };
       const next = prev.map((e) => (e.id === id ? updatedEntry : e));
       syncCategoryToDisk(entry.category, next);
