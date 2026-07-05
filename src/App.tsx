@@ -250,7 +250,7 @@ export default function App() {
   const liveMatches = stTextarea
     ? entries.filter((e) =>
         e.keys.some((key) => keyMatches(key, stTextarea)) &&
-        (quickFilter.length === 0 || quickFilter.includes(e.id))
+        quickFilter.includes(e.id)
       )
     : [];
 
@@ -616,7 +616,10 @@ export default function App() {
             </div>
             <div className="live-modal-list">
               {filteredLiveMatches.length === 0 ? (
-                <p className="empty">No matches</p>
+                <div className="empty">
+                  <p>No matches</p>
+                  <p className="empty-hint">Make sure entries are marked with the quick filter icon</p>
+                </div>
               ) : (
                 filteredLiveMatches.map((entry) => (
                   <div
