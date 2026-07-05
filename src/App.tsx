@@ -51,6 +51,16 @@ function generateId(): string {
 const FAVORITES_KEY = "lorebook-favorites";
 const MAX_FAVORITES = 3;
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function keyMatches(key: string, text: string): boolean {
+  if (!key || !text) return false;
+  const pattern = new RegExp(`\\b${escapeRegex(key)}s?\\b`, 'i');
+  return pattern.test(text);
+}
+
 function loadFavorites(): string[] {
   try {
     const raw = localStorage.getItem(FAVORITES_KEY);
@@ -60,6 +70,31 @@ function loadFavorites(): string[] {
 
 function saveFavorites(names: string[]): void {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(names));
+}
+
+const QUICK_FILTER_KEY = "lorebook-quick-filter";
+const COPIED_KEY = "lorebook-copied";
+
+function loadQuickFilter(): string[] {
+  try {
+    const raw = localStorage.getItem(QUICK_FILTER_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveQuickFilter(ids: string[]): void {
+  localStorage.setItem(QUICK_FILTER_KEY, JSON.stringify(ids));
+}
+
+function loadCopied(): string[] {
+  try {
+    const raw = localStorage.getItem(COPIED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveCopied(ids: string[]): void {
+  localStorage.setItem(COPIED_KEY, JSON.stringify(ids));
 }
 
 export default function App() {
@@ -76,6 +111,13 @@ export default function App() {
   const [dataDir, setDataDir] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>(loadFavorites);
+  const [quickFilter, setQuickFilter] = useState<string[]>(loadQuickFilter);
+  const [stTextarea, setStTextarea] = useState("");
+  const [wsConnected, setWsConnected] = useState(false);
+  const [liveMode, setLiveMode] = useState(false);
+  const [liveSelected, setLiveSelected] = useState<Set<string>>(new Set());
+  const [liveCopied, setLiveCopied] = useState<Set<string>>(() => new Set(loadCopied()));
+  const [liveFilter, setLiveFilter] = useState<"available" | "copied" | "all">("available");
   const formRef = useRef<EntryFormHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const highlightTimerRef = useRef<number | null>(null);
@@ -96,6 +138,16 @@ export default function App() {
       }
       const next = [...prev, name];
       saveFavorites(next);
+      return next;
+    });
+  }
+
+  function toggleQuickFilter(id: string) {
+    setQuickFilter((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((f) => f !== id)
+        : [...prev, id];
+      saveQuickFilter(next);
       return next;
     });
   }
@@ -169,6 +221,22 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleCtrlF);
   }, []);
 
+  // SSE connection to receive SillyTavern textarea content
+  useEffect(() => {
+    const eventSource = new EventSource("/api/st-textarea/stream");
+
+    eventSource.onopen = () => setWsConnected(true);
+    eventSource.onerror = () => setWsConnected(false);
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setStTextarea(data.content || "");
+        setWsConnected(true);
+      } catch { /* ignore invalid JSON */ }
+    };
+
+    return () => eventSource.close();
+  }, []);
 
   const syncCategoryToDisk = useCallback((catId: string, allEntries: Entry[], catName?: string) => {
     const cat = categories.find((c) => c.id === catId);
@@ -179,6 +247,12 @@ export default function App() {
   }, [categories]);
 
   const filtered = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
+  const liveMatches = stTextarea
+    ? entries.filter((e) =>
+        e.keys.some((key) => keyMatches(key, stTextarea)) &&
+        (quickFilter.length === 0 || quickFilter.includes(e.id))
+      )
+    : [];
 
   const handleSave = useCallback((name: string, keys: string[], content: string, category: string) => {
     if (editing) {
@@ -323,6 +397,15 @@ export default function App() {
           )}
         </div>
         <div className="header-actions">
+          <button
+            className={`header-btn live-btn ${liveMatches.length > 0 ? "live-active" : ""}`}
+            title={wsConnected ? `Live matches: ${liveMatches.length}` : "SillyTavern not connected"}
+            onClick={() => setLiveMode(true)}
+          >
+            <span className={`live-dot ${wsConnected ? "connected" : ""}`} />
+            <span className="live-label">Live{liveMatches.length > 0 ? ` (${liveMatches.length})` : ""}</span>
+          </button>
+          <div className="header-divider" />
           {!editing && (
             <button className="header-btn header-submit" title="Add" onClick={() => formRef.current?.submit()}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -428,6 +511,8 @@ export default function App() {
             onCancel={() => setEditing(null)}
             isFavorite={editing ? favorites.includes(editing.name) : false}
             onToggleFavorite={editing ? () => toggleFavorite(editing.name) : undefined}
+            isQuickFilter={editing ? quickFilter.includes(editing.id) : false}
+            onToggleQuickFilter={editing ? () => toggleQuickFilter(editing.id) : undefined}
             searchQuery={search}
             searchMode={searchMode}
           />
@@ -471,6 +556,115 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      {liveMode && (() => {
+        const filteredLiveMatches = liveMatches.filter((e) => {
+          if (liveFilter === "available") return !liveCopied.has(e.id);
+          if (liveFilter === "copied") return liveCopied.has(e.id);
+          return true;
+        });
+        return (
+        <div className="modal-backdrop" onClick={() => { setLiveMode(false); setLiveSelected(new Set()); }}>
+          <div className="modal live-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="live-modal-header">
+              <h2>Live Matches ({filteredLiveMatches.length}) <span className={`live-dot ${wsConnected ? "connected" : ""}`} /></h2>
+              <div className="live-modal-actions">
+                <select
+                  className="live-filter-select"
+                  value={liveFilter}
+                  onChange={(e) => setLiveFilter(e.target.value as "available" | "copied" | "all")}
+                >
+                  <option value="available">Available</option>
+                  <option value="copied">Copied</option>
+                  <option value="all">All</option>
+                </select>
+                <button
+                  className="btn-clear"
+                  onClick={() => {
+                    setLiveCopied(new Set());
+                    saveCopied([]);
+                    showToast("Cleared all copied flags", "success");
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  className="btn-select"
+                  onClick={() => {
+                    if (liveSelected.size > 0) {
+                      const selectedEntries = filteredLiveMatches.filter((e) => liveSelected.has(e.id));
+                      const combinedContent = selectedEntries
+                        .map((e) => e.content)
+                        .join("\n---\n");
+                      navigator.clipboard.writeText(formatClipboard(clipboardTemplate, combinedContent));
+                      setLiveCopied((prev) => {
+                        const next = new Set(prev);
+                        selectedEntries.forEach((e) => next.add(e.id));
+                        saveCopied([...next]);
+                        return next;
+                      });
+                      showToast(`Copied ${selectedEntries.length} entries`, "success");
+                      setLiveSelected(new Set());
+                    } else {
+                      setLiveSelected(new Set(filteredLiveMatches.map((e) => e.id)));
+                    }
+                  }}
+                >
+                  {liveSelected.size > 0 ? `Copy (${liveSelected.size})` : "Select All"}
+                </button>
+              </div>
+            </div>
+            <div className="live-modal-list">
+              {filteredLiveMatches.length === 0 ? (
+                <p className="empty">No matches</p>
+              ) : (
+                filteredLiveMatches.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={`live-match-item ${liveSelected.has(entry.id) ? "selected" : ""}`}
+                    onClick={() => {
+                      setLiveSelected((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(entry.id)) {
+                          next.delete(entry.id);
+                        } else {
+                          next.add(entry.id);
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    <span className="live-match-name">{entry.name || "(unnamed)"}</span>
+                    <input
+                      type="checkbox"
+                      className="live-copied-checkbox"
+                      checked={liveCopied.has(entry.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        setLiveCopied((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) {
+                            next.add(entry.id);
+                          } else {
+                            next.delete(entry.id);
+                          }
+                          saveCopied([...next]);
+                          return next;
+                        });
+                      }}
+                      title="Mark as copied"
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => { setLiveMode(false); setLiveSelected(new Set()); }}>Close</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       <Toaster
         position="top-center"

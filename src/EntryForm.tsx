@@ -9,6 +9,8 @@ interface Props {
   onCancel: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  isQuickFilter?: boolean;
+  onToggleQuickFilter?: () => void;
   searchQuery?: string;
   searchMode?: SearchMode;
 }
@@ -17,7 +19,7 @@ export interface EntryFormHandle {
   submit: () => void;
 }
 
-const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onSave, onCancel, isFavorite, onToggleFavorite, searchQuery, searchMode }, ref) => {
+const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onSave, onCancel, isFavorite, onToggleFavorite, isQuickFilter, onToggleQuickFilter, searchQuery, searchMode }, ref) => {
   const [name, setName] = useState("");
   const [keysInput, setKeysInput] = useState("");
   const [content, setContent] = useState("");
@@ -188,6 +190,18 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </button>
+            )}
+            {editing && onToggleQuickFilter && (
+              <button
+                type="button"
+                className={`btn-quick-filter ${isQuickFilter ? "active" : ""}`}
+                onClick={(e) => { e.stopPropagation(); onToggleQuickFilter(); }}
+                title={isQuickFilter ? "Remove from quick filter" : "Add to quick filter"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={isQuickFilter ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
                 </svg>
               </button>
             )}

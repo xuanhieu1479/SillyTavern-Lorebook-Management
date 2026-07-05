@@ -101,6 +101,38 @@ header h1 {
   margin: 0 4px;
 }
 
+.live-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.live-btn.live-active {
+  background: var(--tag-bg);
+  color: var(--accent);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.live-dot.connected {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+.live-label {
+  white-space: nowrap;
+}
+
 /* Two-column layout — fills all available space */
 .main-layout {
   display: flex;
@@ -283,6 +315,35 @@ header h1 {
 .btn-favorite.favorited:hover {
   background: transparent !important;
   filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.8));
+}
+
+.btn-quick-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent !important;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: color 0.15s, filter 0.15s;
+}
+
+.btn-quick-filter:hover {
+  background: transparent !important;
+  color: #3b82f6;
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
+}
+
+.btn-quick-filter.active {
+  color: #3b82f6;
+}
+
+.btn-quick-filter.active:hover {
+  background: transparent !important;
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8));
 }
 
 .token-count {
@@ -965,6 +1026,131 @@ header h1 {
 
 .modal-actions .btn-cancel:hover {
   background: var(--danger-hover);
+}
+
+/* Live modal */
+.live-modal {
+  width: 500px;
+  max-width: 90vw;
+  height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.live-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.live-modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.live-modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.live-modal-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live-match-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.live-match-item:hover {
+  border-color: var(--accent);
+}
+
+.live-match-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-match-item.selected {
+  border-color: var(--accent);
+  background: var(--tag-bg);
+}
+
+.live-match-item {
+  cursor: pointer;
+}
+
+.btn-select {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.btn-select:hover {
+  opacity: 0.9;
+}
+
+.live-filter-select {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  width: auto;
+}
+
+.btn-clear {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--border);
+  color: var(--text-h);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.btn-clear:hover {
+  background: var(--hover);
+}
+
+.live-copied-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 

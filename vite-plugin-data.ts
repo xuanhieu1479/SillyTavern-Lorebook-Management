@@ -1,4 +1,5 @@
 import type { Plugin } from "vite";
+import type { ServerResponse } from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
@@ -40,6 +41,63 @@ export default function dataPlugin(): Plugin {
   return {
     name: "data-api",
     configureServer(server) {
+      // SSE for SillyTavern textarea sync
+      let latestTextarea = "";
+      const sseClients = new Set<ServerResponse>();
+
+      // SSE stream endpoint - React listens here
+      server.middlewares.use("/api/st-textarea/stream", (req, res) => {
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.flushHeaders();
+
+        sseClients.add(res);
+        res.write(`data: ${JSON.stringify({ content: latestTextarea })}\n\n`);
+
+        req.on("close", () => sseClients.delete(res));
+      });
+
+      // POST endpoint - ST extension sends here
+      server.middlewares.use("/api/st-textarea", (req, res) => {
+        if (req.method === "OPTIONS") {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        let body = "";
+        req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+        req.on("end", () => {
+          try {
+            const { content } = JSON.parse(body);
+            latestTextarea = content ?? "";
+            for (const client of sseClients) {
+              client.write(`data: ${JSON.stringify({ content: latestTextarea })}\n\n`);
+            }
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ ok: true }));
+          } catch {
+            res.statusCode = 400;
+            res.end();
+          }
+        });
+      });
+
       // Load all lorebook files from the configured worlds directory.
       server.middlewares.use("/api/load-all", (req, res) => {
         if (req.method !== "GET") {
