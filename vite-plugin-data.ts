@@ -314,6 +314,16 @@ export default function dataPlugin(): Plugin {
 
       // Read/write settings.json (lives in APP_DIR, separate from the worlds folder).
       server.middlewares.use("/api/settings", (req, res) => {
+        // CORS for SillyTavern extension access
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+        if (req.method === "OPTIONS") {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
         if (req.method === "GET") {
           try {
             ensureAppDir();

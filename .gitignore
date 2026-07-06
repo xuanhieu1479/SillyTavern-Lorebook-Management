@@ -27,3 +27,4 @@ data
 *.sw?
 
 /expose-main-input
+/analysis-sweep
