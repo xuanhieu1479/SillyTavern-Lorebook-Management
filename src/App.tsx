@@ -57,7 +57,8 @@ function escapeRegex(str: string): string {
 
 function keyMatches(key: string, text: string): boolean {
   if (!key || !text) return false;
-  const pattern = new RegExp(`\\b${escapeRegex(key)}[s+]?(?![a-zA-Z])`, 'i');
+  const baseKey = key.replace(/[s+]+$/i, '');
+  const pattern = new RegExp(`\\b${escapeRegex(baseKey)}[s+]?(?![a-zA-Z])`, 'i');
   return pattern.test(text);
 }
 
