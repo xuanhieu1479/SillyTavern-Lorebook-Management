@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Entry, Category } from "./types";
 import EntryActions from "./EntryActions";
 
@@ -15,13 +15,19 @@ interface Props {
   onMove: (id: string, categoryId: string) => void;
   onCopy: (content: string) => void;
   onToggleDisabled: (id: string) => void;
+  quickFilter: string[];
 }
 
-export default function EntryList({ entries, categories, onEdit, onDelete, editingId, highlightId, onDuplicate, onMove, onCopy, onToggleDisabled }: Props) {
+export default function EntryList({ entries, categories, onEdit, onDelete, editingId, highlightId, onDuplicate, onMove, onCopy, onToggleDisabled, quickFilter }: Props) {
   const [page, setPage] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
   const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
   const paged = entries.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  useEffect(() => {
+    listRef.current?.scrollTo(0, 0);
+  }, [safePage]);
 
   if (entries.length === 0) {
     return <p className="empty">No entries found.</p>;
@@ -39,13 +45,14 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
           </div>
         )}
       </div>
-      <div className="entry-list">
+      <div className="entry-list" ref={listRef}>
         {paged.map((entry) => {
           const isDisabled = Boolean((entry.extra?._raw as Record<string, unknown> | undefined)?.disable);
+          const isQuickFiltered = quickFilter.includes(entry.id);
           return (
             <div
               key={entry.id}
-              className={`entry-card${editingId === entry.id ? " selected" : ""}${highlightId === entry.id ? " highlight-new" : ""}${isDisabled ? " entry-disabled" : ""}`}
+              className={`entry-card${editingId === entry.id ? " selected" : ""}${highlightId === entry.id ? " highlight-new" : ""}${isDisabled ? " entry-disabled" : ""}${isQuickFiltered ? " quick-filtered" : ""}`}
               onClick={() => onEdit(entry)}
             >
               <div className="entry-card-header">

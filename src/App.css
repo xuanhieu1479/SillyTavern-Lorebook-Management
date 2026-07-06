@@ -557,6 +557,12 @@ header h1 {
   opacity: 0.5;
 }
 
+/* Quick filter indicator */
+.entry-card.quick-filtered {
+  border-color: #f5c518;
+  background: rgba(245, 197, 24, 0.1);
+}
+
 .entry-card-header {
   display: flex;
   align-items: center;

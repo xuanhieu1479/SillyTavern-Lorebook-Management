@@ -169,13 +169,14 @@ export default function App() {
       const newEntries: Entry[] = [];
 
       for (const file of files) {
-        const catId = generateId();
+        const catId = `cat:${file.fileName}`;
         newCategories.push({ id: catId, name: file.fileName, extras: file.fileExtras });
 
         for (const val of Object.values(file.entries)) {
           const v = val as Record<string, unknown>;
+          const entryUid = v.uid ?? generateId();
           newEntries.push({
-            id: generateId(),
+            id: `${file.fileName}:${entryUid}`,
             name: (v.comment as string) ?? "",
             keys: (v.key as string[]) ?? [],
             content: (v.content as string) ?? "",
@@ -271,8 +272,9 @@ export default function App() {
       setEntries((prev) => {
         const siblings = prev.filter((e) => e.category === category);
         const newRaw = makeRawForNewEntry(siblings);
+        const catName = categories.find((c) => c.id === category)?.name ?? category;
         const newEntry: Entry = {
-          id: generateId(),
+          id: `${catName}:${newRaw.uid}`,
           name,
           keys,
           content,
@@ -285,7 +287,7 @@ export default function App() {
       });
     }
     dirtyRef.current = true;
-  }, [editing, syncCategoryToDisk]);
+  }, [editing, syncCategoryToDisk, categories]);
 
   function handleDelete(id: string) {
     createSnapshot();
@@ -307,7 +309,7 @@ export default function App() {
   }
 
   function handleDuplicate(id: string) {
-    const newId = generateId();
+    let newId = "";
     setEntries((prev) => {
       const source = prev.find((e) => e.id === id);
       if (!source) return prev;
@@ -316,6 +318,8 @@ export default function App() {
       const newRaw = sourceRaw
         ? cloneRawForDuplicate(sourceRaw, siblings)
         : makeRawForNewEntry(siblings);
+      const catName = categories.find((c) => c.id === source.category)?.name ?? source.category;
+      newId = `${catName}:${newRaw.uid}`;
       const duplicate: Entry = {
         ...source,
         id: newId,
@@ -499,6 +503,7 @@ export default function App() {
               showToast("Copied to clipboard", "success");
             }}
             onToggleDisabled={handleToggleDisabled}
+            quickFilter={quickFilter}
           />
         </div>
 
