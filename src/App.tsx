@@ -204,6 +204,22 @@ export default function App() {
     return () => eventSource.close();
   }, []);
 
+  // SSE connection for settings change notifications (e.g., ST extension clearing copied flags)
+  useEffect(() => {
+    const eventSource = new EventSource("/api/settings/stream");
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === "copied-cleared") {
+          setLiveCopied(new Set());
+        }
+      } catch { /* ignore */ }
+    };
+
+    return () => eventSource.close();
+  }, []);
+
   const syncCategoryToDisk = useCallback((catId: string, allEntries: Entry[], catName?: string) => {
     const cat = categories.find((c) => c.id === catId);
     const name = catName ?? cat?.name;

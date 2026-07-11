@@ -40,6 +40,31 @@ export default function dataPlugin(): Plugin {
       let latestTextarea = "";
       const sseClients = new Set<ServerResponse>();
 
+      // SSE for settings change notifications (e.g., when ST extension clears copied flags)
+      const settingsSseClients = new Set<ServerResponse>();
+
+      server.middlewares.use("/api/settings/stream", (req, res) => {
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.flushHeaders();
+
+        settingsSseClients.add(res);
+        req.on("close", () => settingsSseClients.delete(res));
+      });
+
+      function broadcastSettingsChange(event: string) {
+        for (const client of settingsSseClients) {
+          client.write(`data: ${JSON.stringify({ event })}\n\n`);
+        }
+      }
+
       // SSE stream endpoint - React listens here
       server.middlewares.use("/api/st-textarea/stream", (req, res) => {
         if (req.method !== "GET") {
@@ -207,6 +232,7 @@ export default function dataPlugin(): Plugin {
           const settings = readSettings();
           settings.copied = [];
           fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
+          broadcastSettingsChange("copied-cleared");
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify({ ok: true }));
         } catch (err) {
