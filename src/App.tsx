@@ -85,7 +85,6 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const highlightTimerRef = useRef<number | null>(null);
   const lastCtrlFRef = useRef(0);
-  const toggleDebounceRef = useRef<Map<string, number>>(new Map());
 
   function toggleFavorite(name: string) {
     setFavorites((prev) => {
@@ -320,15 +319,7 @@ export default function App() {
         extra: { ...entry.extra, _raw: { ...raw, disable: newDisabled } },
       };
       const next = prev.map((e) => (e.id === id ? updatedEntry : e));
-
-      const existingTimer = toggleDebounceRef.current.get(entry.category);
-      if (existingTimer) window.clearTimeout(existingTimer);
-      const timer = window.setTimeout(() => {
-        toggleDebounceRef.current.delete(entry.category);
-        syncCategoryToDisk(entry.category, next);
-      }, 2000);
-      toggleDebounceRef.current.set(entry.category, timer);
-
+      syncCategoryToDisk(entry.category, next);
       return next;
     });
   }

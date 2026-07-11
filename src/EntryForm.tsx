@@ -63,7 +63,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
       if (trimmedName && category) {
         onSave(trimmedName, keys, content, category);
       }
-    }, 1000);
+    }, 500);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
