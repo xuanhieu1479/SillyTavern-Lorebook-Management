@@ -145,6 +145,10 @@ export interface AppSettings {
   dataDir?: string;
   latestSnapshot?: string | null;
   maxBackups?: number;
+  favorites?: string[];
+  quickFilter?: string[];
+  copied?: string[];
+  maxFavorites?: number;
 }
 
 export async function createSnapshot(): Promise<void> {

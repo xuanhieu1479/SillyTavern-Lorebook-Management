@@ -33,7 +33,7 @@ function showToast(message: string, type: "success" | "error") {
     toastQueue.push(id);
   }
 }
-import { saveCategoryFile, loadAllFromDisk, loadSettings, createSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
+import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, createSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
@@ -48,8 +48,7 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-const FAVORITES_KEY = "lorebook-favorites";
-const MAX_FAVORITES = 3;
+const DEFAULT_MAX_FAVORITES = 5;
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -60,42 +59,6 @@ function keyMatches(key: string, text: string): boolean {
   const baseKey = key.replace(/[s+]+$/i, '');
   const pattern = new RegExp(`\\b${escapeRegex(baseKey)}[s+]?(?![a-zA-Z])`, 'i');
   return pattern.test(text);
-}
-
-function loadFavorites(): string[] {
-  try {
-    const raw = localStorage.getItem(FAVORITES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveFavorites(names: string[]): void {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(names));
-}
-
-const QUICK_FILTER_KEY = "lorebook-quick-filter";
-const COPIED_KEY = "lorebook-copied";
-
-function loadQuickFilter(): string[] {
-  try {
-    const raw = localStorage.getItem(QUICK_FILTER_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveQuickFilter(ids: string[]): void {
-  localStorage.setItem(QUICK_FILTER_KEY, JSON.stringify(ids));
-}
-
-function loadCopied(): string[] {
-  try {
-    const raw = localStorage.getItem(COPIED_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveCopied(ids: string[]): void {
-  localStorage.setItem(COPIED_KEY, JSON.stringify(ids));
 }
 
 export default function App() {
@@ -111,13 +74,14 @@ export default function App() {
   const [clipboardTemplate, setClipboardTemplate] = useState("{{content}}");
   const [dataDir, setDataDir] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<string[]>(loadFavorites);
-  const [quickFilter, setQuickFilter] = useState<string[]>(loadQuickFilter);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [quickFilter, setQuickFilter] = useState<string[]>([]);
+  const [maxFavorites, setMaxFavorites] = useState(DEFAULT_MAX_FAVORITES);
   const [stTextarea, setStTextarea] = useState("");
   const [wsConnected, setWsConnected] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
   const [liveSelected, setLiveSelected] = useState<Set<string>>(new Set());
-  const [liveCopied, setLiveCopied] = useState<Set<string>>(() => new Set(loadCopied()));
+  const [liveCopied, setLiveCopied] = useState<Set<string>>(new Set());
   const [liveFilter, setLiveFilter] = useState<"available" | "copied" | "all">("available");
   const formRef = useRef<EntryFormHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -130,15 +94,15 @@ export default function App() {
     setFavorites((prev) => {
       if (prev.includes(name)) {
         const next = prev.filter((f) => f !== name);
-        saveFavorites(next);
+        saveSettings({ favorites: next });
         return next;
       }
-      if (prev.length >= MAX_FAVORITES) {
-        showToast(`Maximum ${MAX_FAVORITES} favorites allowed.`, "error");
+      if (prev.length >= maxFavorites) {
+        showToast(`Maximum ${maxFavorites} favorites allowed.`, "error");
         return prev;
       }
       const next = [...prev, name];
-      saveFavorites(next);
+      saveSettings({ favorites: next });
       return next;
     });
   }
@@ -148,7 +112,7 @@ export default function App() {
       const next = prev.includes(id)
         ? prev.filter((f) => f !== id)
         : [...prev, id];
-      saveQuickFilter(next);
+      saveSettings({ quickFilter: next });
       return next;
     });
   }
@@ -193,6 +157,10 @@ export default function App() {
       setFilterCat("");
       setClipboardTemplate(settings.clipboardTemplate || "{{content}}");
       setDataDir(settings.dataDir ?? "");
+      setFavorites(settings.favorites ?? []);
+      setQuickFilter(settings.quickFilter ?? []);
+      setLiveCopied(new Set(settings.copied ?? []));
+      setMaxFavorites(settings.maxFavorites ?? DEFAULT_MAX_FAVORITES);
     } catch (err) {
       console.error("Failed to load from disk:", err);
     }
@@ -588,7 +556,7 @@ export default function App() {
                   className="btn-clear"
                   onClick={() => {
                     setLiveCopied(new Set());
-                    saveCopied([]);
+                    saveSettings({ copied: [] });
                     showToast("Cleared all copied flags", "success");
                   }}
                 >
@@ -606,7 +574,7 @@ export default function App() {
                       setLiveCopied((prev) => {
                         const next = new Set(prev);
                         selectedEntries.forEach((e) => next.add(e.id));
-                        saveCopied([...next]);
+                        saveSettings({ copied: [...next] });
                         return next;
                       });
                       showToast(`Copied ${selectedEntries.length} entries`, "success");
@@ -657,7 +625,7 @@ export default function App() {
                           } else {
                             next.delete(entry.id);
                           }
-                          saveCopied([...next]);
+                          saveSettings({ copied: [...next] });
                           return next;
                         });
                       }}
