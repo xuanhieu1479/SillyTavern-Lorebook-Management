@@ -143,64 +143,10 @@ export async function saveCategoryFile(fileName: string, entries: Entry[], fileE
 export interface AppSettings {
   clipboardTemplate?: string;
   dataDir?: string;
-  latestSnapshot?: string | null;
-  maxBackups?: number;
   favorites?: string[];
   quickFilter?: string[];
   copied?: string[];
   maxFavorites?: number;
-}
-
-export async function createSnapshot(): Promise<void> {
-  await fetch("/api/snapshot", { method: "POST" });
-}
-
-export async function getCurrentSnapshot(): Promise<Record<string, unknown>> {
-  const res = await fetch("/api/snapshot-current");
-  return res.json();
-}
-
-export async function restoreRawSnapshot(snapshot: Record<string, unknown>): Promise<void> {
-  await fetch("/api/restore-raw", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(snapshot),
-  });
-}
-
-const PREV_SNAPSHOT_KEY = "lorebook-previous-snapshot";
-
-export function savePreviousSnapshot(snapshot: Record<string, unknown>): void {
-  localStorage.setItem(PREV_SNAPSHOT_KEY, JSON.stringify(snapshot));
-}
-
-export function loadPreviousSnapshot(): Record<string, unknown> | null {
-  const raw = localStorage.getItem(PREV_SNAPSHOT_KEY);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
-export function clearPreviousSnapshot(): void {
-  localStorage.removeItem(PREV_SNAPSHOT_KEY);
-}
-
-export interface BackupInfo {
-  name: string;
-  size: number;
-}
-
-export async function listBackups(): Promise<BackupInfo[]> {
-  const res = await fetch("/api/backups");
-  return res.json();
-}
-
-export async function restoreSnapshot(snapshotName?: string): Promise<{ ok: boolean; error?: string; restored?: string }> {
-  const res = await fetch("/api/restore", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ snapshotName: snapshotName ?? "" }),
-  });
-  return res.json();
 }
 
 export async function loadSettings(): Promise<AppSettings> {

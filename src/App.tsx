@@ -33,14 +33,13 @@ function showToast(message: string, type: "success" | "error") {
     toastQueue.push(id);
   }
 }
-import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, createSnapshot, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
+import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
 import CategoryManager from "./CategoryManager";
 import SettingsModal from "./SettingsModal";
 import { formatClipboard } from "./clipboard";
-import RestoreModal from "./RestoreModal";
 import { searchEntries, filterByCategory, type SearchMode } from "./search";
 import "./App.css";
 
@@ -70,7 +69,6 @@ export default function App() {
   const [editing, setEditing] = useState<Entry | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
-  const [showRestore, setShowRestore] = useState(false);
   const [clipboardTemplate, setClipboardTemplate] = useState("{{content}}");
   const [dataDir, setDataDir] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -86,7 +84,6 @@ export default function App() {
   const formRef = useRef<EntryFormHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const highlightTimerRef = useRef<number | null>(null);
-  const dirtyRef = useRef(false);
   const lastCtrlFRef = useRef(0);
   const toggleDebounceRef = useRef<Map<string, number>>(new Map());
 
@@ -255,11 +252,9 @@ export default function App() {
         return next;
       });
     }
-    dirtyRef.current = true;
   }, [editing, syncCategoryToDisk, categories]);
 
   function handleDelete(id: string) {
-    createSnapshot();
     const entry = entries.find((e) => e.id === id);
     setEntries((prev) => {
       const next = prev.filter((e) => e.id !== id);
@@ -270,10 +265,6 @@ export default function App() {
   }
 
   function handleEdit(entry: Entry) {
-    if (dirtyRef.current) {
-      createSnapshot();
-      dirtyRef.current = false;
-    }
     setEditing(entry);
   }
 
@@ -407,11 +398,6 @@ export default function App() {
               <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
             </svg>
           </button>
-          <button className="header-btn" title="Restore snapshot" onClick={() => setShowRestore(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><circle cx="12" cy="12" r="1"/>
-            </svg>
-          </button>
         </div>
       </header>
 
@@ -510,13 +496,6 @@ export default function App() {
             </div>
           </div>
         </div>
-      )}
-
-      {showRestore && (
-        <RestoreModal
-          onRestore={loadFromDisk}
-          onClose={() => setShowRestore(false)}
-        />
       )}
 
       {showSettings && (
