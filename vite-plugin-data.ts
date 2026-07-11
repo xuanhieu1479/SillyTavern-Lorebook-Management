@@ -186,6 +186,35 @@ export default function dataPlugin(): Plugin {
         res.end();
       });
 
+      // Clear all "copied" flags in settings (called by ST extension on compact).
+      server.middlewares.use("/api/clear-copied", (req, res) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+        if (req.method === "OPTIONS") {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        try {
+          ensureAppDir();
+          const settings = readSettings();
+          settings.copied = [];
+          fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      });
+
       // Save a world file to the configured worlds directory.
       server.middlewares.use("/api/save-category", (req, res) => {
         if (req.method !== "POST") {
