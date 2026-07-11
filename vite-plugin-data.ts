@@ -43,6 +43,31 @@ export default function dataPlugin(): Plugin {
       // SSE for settings change notifications (e.g., when ST extension clears copied flags)
       const settingsSseClients = new Set<ServerResponse>();
 
+      // SSE for world info updates (ST extension listens to auto-reload)
+      const worldInfoSseClients = new Set<ServerResponse>();
+
+      server.middlewares.use("/api/world-info/stream", (req, res) => {
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.flushHeaders();
+
+        worldInfoSseClients.add(res);
+        req.on("close", () => worldInfoSseClients.delete(res));
+      });
+
+      function broadcastWorldInfoUpdate() {
+        for (const client of worldInfoSseClients) {
+          client.write(`event: world-info-updated\ndata: {}\n\n`);
+        }
+      }
+
       server.middlewares.use("/api/settings/stream", (req, res) => {
         if (req.method !== "GET") {
           res.statusCode = 405;
@@ -256,6 +281,7 @@ export default function dataPlugin(): Plugin {
             const dataDir = getDataDir();
             if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
             fs.writeFileSync(path.join(dataDir, `${fileName}.json`), content, "utf-8");
+            broadcastWorldInfoUpdate();
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ ok: true }));
           } catch (err) {
