@@ -36,11 +36,12 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
 
   useEffect(() => {
     if (editing) {
+      const loadedKeys = editing.keys.join(", ");
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync form state when editing prop changes
-      setName(editing.name);
-      setKeysInput(editing.keys.join(", "));
-      setContent(editing.content);
-      setCategory(editing.category);
+      if (name !== editing.name) setName(editing.name);
+      if (keysInput !== loadedKeys) setKeysInput(loadedKeys);
+      if (content !== editing.content) setContent(editing.content);
+      if (category !== editing.category) setCategory(editing.category);
     } else {
       setName("");
       setKeysInput("");
@@ -48,7 +49,8 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
       setCategory("");
     }
     setError("");
-  }, [editing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only sync when editing entry changes, not when form values change
+  }, [editing?.id]);
 
   useEffect(() => {
     if (!editing) return;
