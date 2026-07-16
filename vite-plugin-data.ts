@@ -6,6 +6,7 @@ import { exec } from "node:child_process";
 
 const APP_DIR = path.resolve(__dirname, "data");
 const SETTINGS_PATH = path.join(APP_DIR, "settings.json");
+const DATA_SOURCE_PATH = path.join(APP_DIR, "dataSource.json");
 
 function ensureAppDir() {
   if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true });
@@ -20,16 +21,25 @@ function readSettings(): Record<string, unknown> {
   return {};
 }
 
+function readDataSource(): Record<string, unknown> {
+  try {
+    if (fs.existsSync(DATA_SOURCE_PATH)) {
+      return JSON.parse(fs.readFileSync(DATA_SOURCE_PATH, "utf-8"));
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
 function getDataDir(): string {
-  const settings = readSettings();
+  const dataSource = readDataSource();
   const configured =
-    typeof settings.dataDir === "string" && settings.dataDir.trim() ? settings.dataDir.trim() : null;
+    typeof dataSource.dataDir === "string" && dataSource.dataDir.trim() ? dataSource.dataDir.trim() : null;
   return configured ? path.resolve(configured) : APP_DIR;
 }
 
 function listWorldFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "settings.json");
+  return fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "settings.json" && f !== "dataSource.json");
 }
 
 export default function dataPlugin(): Plugin {
@@ -223,6 +233,54 @@ export default function dataPlugin(): Plugin {
             try {
               ensureAppDir();
               fs.writeFileSync(SETTINGS_PATH, body, "utf-8");
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ ok: true }));
+            } catch (err) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: String(err) }));
+            }
+          });
+          return;
+        }
+        res.statusCode = 405;
+        res.end();
+      });
+
+      // Read/write dataSource.json (stores dataDir separately from other settings).
+      server.middlewares.use("/api/data-source", (req, res) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+        if (req.method === "OPTIONS") {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+        if (req.method === "GET") {
+          try {
+            ensureAppDir();
+            if (fs.existsSync(DATA_SOURCE_PATH)) {
+              const raw = fs.readFileSync(DATA_SOURCE_PATH, "utf-8");
+              res.setHeader("Content-Type", "application/json");
+              res.end(raw);
+            } else {
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({}));
+            }
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: String(err) }));
+          }
+          return;
+        }
+        if (req.method === "POST") {
+          let body = "";
+          req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+          req.on("end", () => {
+            try {
+              ensureAppDir();
+              fs.writeFileSync(DATA_SOURCE_PATH, body, "utf-8");
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ ok: true }));
             } catch (err) {

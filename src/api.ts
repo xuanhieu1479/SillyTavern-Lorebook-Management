@@ -142,11 +142,14 @@ export async function saveCategoryFile(fileName: string, entries: Entry[], fileE
 
 export interface AppSettings {
   clipboardTemplate?: string;
-  dataDir?: string;
   favorites?: string[];
   quickFilter?: string[];
   copied?: string[];
   maxFavorites?: number;
+}
+
+export interface DataSource {
+  dataDir?: string;
 }
 
 export async function loadSettings(): Promise<AppSettings> {
@@ -158,6 +161,21 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
   const existing = await loadSettings();
   const merged = { ...existing, ...settings };
   await fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(merged, null, 2),
+  });
+}
+
+export async function loadDataSource(): Promise<DataSource> {
+  const res = await fetch("/api/data-source");
+  return res.json();
+}
+
+export async function saveDataSource(dataSource: Partial<DataSource>): Promise<void> {
+  const existing = await loadDataSource();
+  const merged = { ...existing, ...dataSource };
+  await fetch("/api/data-source", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(merged, null, 2),

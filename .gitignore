@@ -12,8 +12,8 @@ dist
 dist-ssr
 *.local
 
-# Data folder (user-specific)
-data
+# Data source (user-specific)
+data/dataSource.json
 
 # Editor directories and files
 .vscode/*
@@ -26,5 +26,4 @@ data
 *.sln
 *.sw?
 
-/expose-main-input
 /analysis-sweep

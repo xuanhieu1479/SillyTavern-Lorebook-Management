@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { saveSettings } from "./api";
+import { saveSettings, saveDataSource } from "./api";
 import { DEFAULT_TEMPLATE, formatClipboard } from "./clipboard";
 
 interface Props {
@@ -18,7 +18,8 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
 
   const handleSave = useCallback(() => {
     const trimmedDir = dataDirInput.trim();
-    saveSettings({ clipboardTemplate: template, dataDir: trimmedDir });
+    saveSettings({ clipboardTemplate: template });
+    saveDataSource({ dataDir: trimmedDir });
     onSave({ clipboardTemplate: template, dataDir: trimmedDir });
     onClose();
   }, [dataDirInput, template, onSave, onClose]);

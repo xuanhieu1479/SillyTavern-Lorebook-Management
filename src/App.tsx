@@ -33,7 +33,7 @@ function showToast(message: string, type: "success" | "error") {
     toastQueue.push(id);
   }
 }
-import { saveCategoryFile, loadAllFromDisk, loadSettings, saveSettings, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
+import { saveCategoryFile, loadAllFromDisk, loadSettings, loadDataSource, saveSettings, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
@@ -124,7 +124,7 @@ export default function App() {
 
   const loadFromDisk = useCallback(async () => {
     try {
-      const [files, settings] = await Promise.all([loadAllFromDisk(), loadSettings()]);
+      const [files, settings, dataSource] = await Promise.all([loadAllFromDisk(), loadSettings(), loadDataSource()]);
 
       const newCategories: Category[] = [];
       const newEntries: Entry[] = [];
@@ -152,7 +152,7 @@ export default function App() {
       setEditing(null);
       setFilterCat("");
       setClipboardTemplate(settings.clipboardTemplate || "{{content}}");
-      setDataDir(settings.dataDir ?? "");
+      setDataDir(dataSource.dataDir ?? "");
       setFavorites(settings.favorites ?? []);
       setQuickFilter(settings.quickFilter ?? []);
       setLiveCopied(new Set(settings.copied ?? []));
