@@ -274,7 +274,7 @@ export default function App() {
   }, [liveSection, liveMatchIds]);
 
   const handleLiveCopy = useCallback(() => {
-    const selectedEntries = displayEntries.filter((e) => liveSelected.has(e.id));
+    const selectedEntries = liveSection.filter((e) => liveSelected.has(e.id));
     if (selectedEntries.length === 0) return;
 
     const combinedContent = selectedEntries.map((e) => e.content).join("\n---\n");
@@ -289,7 +289,7 @@ export default function App() {
 
     showToast(`Copied ${selectedEntries.length} entries`, "success");
     setLiveSelected(new Set());
-  }, [displayEntries, liveSelected, clipboardTemplate]);
+  }, [liveSection, liveSelected, clipboardTemplate]);
 
   const handleLiveToggleSelect = useCallback((id: string) => {
     setLiveSelected((prev) => {
