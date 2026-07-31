@@ -55,8 +55,9 @@ function escapeRegex(str: string): string {
 
 function keyMatches(key: string, text: string): boolean {
   if (!key || !text) return false;
-  const baseKey = key.replace(/[s+]$/i, '');
-  const pattern = new RegExp(`\\b${escapeRegex(baseKey)}[s+]?(?![a-zA-Z])`, 'i');
+  // Remove trailing ++ or + or single s (but not multiple s like in "Dress")
+  const baseKey = key.replace(/(\+{1,2}|s)$/i, '');
+  const pattern = new RegExp(`\\b${escapeRegex(baseKey)}(\\+{1,2}|s)?(?![a-zA-Z])`, 'i');
   return pattern.test(text);
 }
 
@@ -77,7 +78,6 @@ export default function App() {
   const [maxFavorites, setMaxFavorites] = useState(DEFAULT_MAX_FAVORITES);
   const [stTextarea, setStTextarea] = useState("");
   const [wsConnected, setWsConnected] = useState(false);
-  const [liveMode, setLiveMode] = useState(false);
   const [liveSelected, setLiveSelected] = useState<Set<string>>(new Set());
   const [liveCopied, setLiveCopied] = useState<Set<string>>(new Set());
   const [liveFilter, setLiveFilter] = useState<"available" | "copied" | "all">("available");
@@ -228,13 +228,93 @@ export default function App() {
     saveCategoryFile(name, catEntries, cat?.extras ?? {});
   }, [categories]);
 
-  const filtered = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
   const liveMatches = stTextarea
     ? entries.filter((e) =>
         e.keys.some((key) => keyMatches(key, stTextarea)) &&
         quickFilter.includes(e.id)
       )
     : [];
+
+  const hasLiveMatches = liveMatches.length > 0;
+  const liveMatchIds = new Set(liveMatches.map((e) => e.id));
+
+  // All disabled entries with matching keys (for display in live section)
+  const allKeyMatches = stTextarea
+    ? entries.filter((e) => {
+        const isDisabled = Boolean((e.extra?._raw as Record<string, unknown> | undefined)?.disable);
+        return isDisabled && e.keys.some((key) => keyMatches(key, stTextarea));
+      })
+    : [];
+  const allKeyMatchIds = new Set(allKeyMatches.map((e) => e.id));
+  const hasKeyMatches = allKeyMatches.length > 0;
+
+  // Live section: all entries with matching keys, filtered by liveFilter (Available/Copied/All)
+  const liveSection = allKeyMatches.filter((e) => {
+    if (liveFilter === "available") return !liveCopied.has(e.id);
+    if (liveFilter === "copied") return liveCopied.has(e.id);
+    return true;
+  });
+
+  // Main list: normal filtered entries (no live section mixing)
+  const displayEntries = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
+
+  // Bulk action handlers for live selection
+  const handleLiveClear = useCallback(() => {
+    setLiveCopied(new Set());
+    saveSettings({ copied: [] });
+    showToast("Cleared all copied flags", "success");
+  }, []);
+
+  const handleLiveSelectAll = useCallback(() => {
+    // Only select entries that are in quickFilter (liveMatches), not all key matches
+    const selectableIds = liveSection
+      .filter((e) => liveMatchIds.has(e.id))
+      .map((e) => e.id);
+    setLiveSelected(new Set(selectableIds));
+  }, [liveSection, liveMatchIds]);
+
+  const handleLiveCopy = useCallback(() => {
+    const selectedEntries = displayEntries.filter((e) => liveSelected.has(e.id));
+    if (selectedEntries.length === 0) return;
+
+    const combinedContent = selectedEntries.map((e) => e.content).join("\n---\n");
+    navigator.clipboard.writeText(formatClipboard(clipboardTemplate, combinedContent));
+
+    setLiveCopied((prev) => {
+      const next = new Set(prev);
+      selectedEntries.forEach((e) => next.add(e.id));
+      saveSettings({ copied: [...next] });
+      return next;
+    });
+
+    showToast(`Copied ${selectedEntries.length} entries`, "success");
+    setLiveSelected(new Set());
+  }, [displayEntries, liveSelected, clipboardTemplate]);
+
+  const handleLiveToggleSelect = useCallback((id: string) => {
+    setLiveSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleLiveToggleCopied = useCallback((id: string) => {
+    setLiveCopied((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      saveSettings({ copied: [...next] });
+      return next;
+    });
+  }, []);
 
   const handleSave = useCallback((name: string, keys: string[], content: string, category: string) => {
     if (editing) {
@@ -368,14 +448,13 @@ export default function App() {
           )}
         </div>
         <div className="header-actions">
-          <button
+          <div
             className={`header-btn live-btn ${liveMatches.length > 0 ? "live-active" : ""}`}
             title={wsConnected ? `Live matches: ${liveMatches.length}` : "SillyTavern not connected"}
-            onClick={() => setLiveMode(true)}
           >
             <span className={`live-dot ${wsConnected ? "connected" : ""}`} />
             <span className="live-label">Live{liveMatches.length > 0 ? ` (${liveMatches.length})` : ""}</span>
-          </button>
+          </div>
           <div className="header-divider" />
           {!editing && (
             <button className="header-btn header-submit" title="Add" onClick={() => formRef.current?.submit()}>
@@ -452,7 +531,7 @@ export default function App() {
             </div>
           </div>
           <EntryList
-            entries={filtered}
+            entries={displayEntries}
             categories={categories}
             onEdit={handleEdit}
             onDelete={handleDelete}
@@ -468,6 +547,68 @@ export default function App() {
             quickFilter={quickFilter}
           />
         </div>
+
+        {/* Live matches overlay panel */}
+        {hasKeyMatches && (
+          <div className="live-panel">
+            <div className="live-panel-header">
+              <h3>Live Matches ({liveSection.length})</h3>
+              <div className="live-panel-actions">
+                <select
+                  className="live-filter-select"
+                  value={liveFilter}
+                  onChange={(e) => setLiveFilter(e.target.value as "available" | "copied" | "all")}
+                >
+                  <option value="available">Available</option>
+                  <option value="copied">Copied</option>
+                  <option value="all">All</option>
+                </select>
+                <button className="btn-clear" onClick={handleLiveClear}>Clear</button>
+                <button
+                  className="btn-select"
+                  onClick={liveSelected.size > 0 ? handleLiveCopy : handleLiveSelectAll}
+                >
+                  {liveSelected.size > 0 ? `Copy (${liveSelected.size})` : "Select All"}
+                </button>
+              </div>
+            </div>
+            <div className="live-panel-list">
+              {liveSection.length === 0 ? (
+                <div className="empty">No matches</div>
+              ) : (
+                liveSection.map((entry) => {
+                  const isSelected = liveSelected.has(entry.id);
+                  const isCopied = liveCopied.has(entry.id);
+                  const isFiltered = liveMatchIds.has(entry.id);
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`live-panel-item${isSelected ? " selected" : ""}${isFiltered ? " filtered" : ""}`}
+                      onClick={() => handleLiveToggleSelect(entry.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        className="live-select-checkbox"
+                        checked={isSelected}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => handleLiveToggleSelect(entry.id)}
+                      />
+                      <span className="live-panel-name">{entry.name || "(unnamed)"}</span>
+                      <input
+                        type="checkbox"
+                        className="live-copied-checkbox"
+                        checked={isCopied}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => handleLiveToggleCopied(entry.id)}
+                        title="Mark as copied"
+                      />
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="right-panel">
           <EntryForm
@@ -516,118 +657,6 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
-
-      {liveMode && (() => {
-        const filteredLiveMatches = liveMatches.filter((e) => {
-          if (liveFilter === "available") return !liveCopied.has(e.id);
-          if (liveFilter === "copied") return liveCopied.has(e.id);
-          return true;
-        });
-        return (
-        <div className="modal-backdrop" onClick={() => { setLiveMode(false); setLiveSelected(new Set()); }}>
-          <div className="modal live-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="live-modal-header">
-              <h2>Live Matches ({filteredLiveMatches.length}) <span className={`live-dot ${wsConnected ? "connected" : ""}`} /></h2>
-              <div className="live-modal-actions">
-                <select
-                  className="live-filter-select"
-                  value={liveFilter}
-                  onChange={(e) => setLiveFilter(e.target.value as "available" | "copied" | "all")}
-                >
-                  <option value="available">Available</option>
-                  <option value="copied">Copied</option>
-                  <option value="all">All</option>
-                </select>
-                <button
-                  className="btn-clear"
-                  onClick={() => {
-                    setLiveCopied(new Set());
-                    saveSettings({ copied: [] });
-                    showToast("Cleared all copied flags", "success");
-                  }}
-                >
-                  Clear
-                </button>
-                <button
-                  className="btn-select"
-                  onClick={() => {
-                    if (liveSelected.size > 0) {
-                      const selectedEntries = filteredLiveMatches.filter((e) => liveSelected.has(e.id));
-                      const combinedContent = selectedEntries
-                        .map((e) => e.content)
-                        .join("\n---\n");
-                      navigator.clipboard.writeText(formatClipboard(clipboardTemplate, combinedContent));
-                      setLiveCopied((prev) => {
-                        const next = new Set(prev);
-                        selectedEntries.forEach((e) => next.add(e.id));
-                        saveSettings({ copied: [...next] });
-                        return next;
-                      });
-                      showToast(`Copied ${selectedEntries.length} entries`, "success");
-                      setLiveSelected(new Set());
-                    } else {
-                      setLiveSelected(new Set(filteredLiveMatches.map((e) => e.id)));
-                    }
-                  }}
-                >
-                  {liveSelected.size > 0 ? `Copy (${liveSelected.size})` : "Select All"}
-                </button>
-              </div>
-            </div>
-            <div className="live-modal-list">
-              {filteredLiveMatches.length === 0 ? (
-                <div className="empty">
-                  <p>No matches</p>
-                  <p className="empty-hint">Make sure entries are marked with the quick filter icon</p>
-                </div>
-              ) : (
-                filteredLiveMatches.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={`live-match-item ${liveSelected.has(entry.id) ? "selected" : ""}`}
-                    onClick={() => {
-                      setLiveSelected((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(entry.id)) {
-                          next.delete(entry.id);
-                        } else {
-                          next.add(entry.id);
-                        }
-                        return next;
-                      });
-                    }}
-                  >
-                    <span className="live-match-name">{entry.name || "(unnamed)"}</span>
-                    <input
-                      type="checkbox"
-                      className="live-copied-checkbox"
-                      checked={liveCopied.has(entry.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        setLiveCopied((prev) => {
-                          const next = new Set(prev);
-                          if (e.target.checked) {
-                            next.add(entry.id);
-                          } else {
-                            next.delete(entry.id);
-                          }
-                          saveSettings({ copied: [...next] });
-                          return next;
-                        });
-                      }}
-                      title="Mark as copied"
-                    />
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="modal-actions">
-              <button onClick={() => { setLiveMode(false); setLiveSelected(new Set()); }}>Close</button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
 
       <Toaster
         position="top-center"

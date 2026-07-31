@@ -49,6 +49,7 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
         {paged.map((entry) => {
           const isDisabled = Boolean((entry.extra?._raw as Record<string, unknown> | undefined)?.disable);
           const isQuickFiltered = quickFilter.includes(entry.id);
+
           return (
             <div
               key={entry.id}
@@ -71,10 +72,16 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
                 </button>
               </div>
               <div className="entry-card-row">
-                <div className="entry-keys">
-                  {entry.keys.map((k, i) => (
+                <div
+                  className="entry-keys"
+                  title={entry.keys.length > 2 ? entry.keys.join(", ") : undefined}
+                >
+                  {entry.keys.slice(0, 2).map((k, i) => (
                     <span key={i} className="key-tag">{k}</span>
                   ))}
+                  {entry.keys.length > 2 && (
+                    <span className="key-tag key-more">+{entry.keys.length - 2}</span>
+                  )}
                 </div>
                 <EntryActions
                   entry={entry}
@@ -90,7 +97,6 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
           );
         })}
       </div>
-
     </div>
   );
 }
