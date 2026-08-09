@@ -593,7 +593,7 @@ export default function App() {
                         onClick={(e) => e.stopPropagation()}
                         onChange={() => handleLiveToggleSelect(entry.id)}
                       />
-                      <span className="live-panel-name">{entry.name || "(unnamed)"}</span>
+                      <span className="live-panel-name" title={entry.name || "(unnamed)"}>{entry.name || "(unnamed)"}</span>
                       <input
                         type="checkbox"
                         className="live-copied-checkbox"
