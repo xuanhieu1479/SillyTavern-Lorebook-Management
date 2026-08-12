@@ -27,3 +27,4 @@ data/dataSource.json
 *.sw?
 
 /analysis-sweep
+/Extension-CacheRefresh
