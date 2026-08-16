@@ -15,6 +15,9 @@ dist-ssr
 # Data source (user-specific)
 data/dataSource.json
 
+# Backup folder (local snapshots)
+data/backup/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

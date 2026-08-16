@@ -7,6 +7,9 @@ import { exec } from "node:child_process";
 const APP_DIR = path.resolve(__dirname, "data");
 const SETTINGS_PATH = path.join(APP_DIR, "settings.json");
 const DATA_SOURCE_PATH = path.join(APP_DIR, "dataSource.json");
+const BACKUP_DIR = path.join(APP_DIR, "backup");
+const BACKUP_MAX_AGE_DAYS = 30;
+const BACKUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 function ensureAppDir() {
   if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true });
@@ -42,10 +45,71 @@ function listWorldFiles(dir: string): string[] {
   return fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "settings.json" && f !== "dataSource.json");
 }
 
+function formatTimestamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
+function parseTimestamp(name: string): Date | null {
+  const match = name.match(/^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day, hour, min, sec] = match.map(Number);
+  return new Date(year, month - 1, day, hour, min, sec);
+}
+
+function createBackup(): void {
+  try {
+    const dataDir = getDataDir();
+    const files = listWorldFiles(dataDir);
+    if (files.length === 0) return;
+
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+    const timestamp = formatTimestamp(new Date());
+    const backupPath = path.join(BACKUP_DIR, timestamp);
+    fs.mkdirSync(backupPath, { recursive: true });
+
+    for (const file of files) {
+      const src = path.join(dataDir, file);
+      const dest = path.join(backupPath, file);
+      fs.copyFileSync(src, dest);
+    }
+    console.log(`[backup] Created backup: ${timestamp} (${files.length} files)`);
+  } catch (err) {
+    console.error("[backup] Failed to create backup:", err);
+  }
+}
+
+function cleanOldBackups(): void {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) return;
+
+    const cutoff = Date.now() - BACKUP_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const entries = fs.readdirSync(BACKUP_DIR, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const date = parseTimestamp(entry.name);
+      if (!date || date.getTime() >= cutoff) continue;
+
+      const folderPath = path.join(BACKUP_DIR, entry.name);
+      fs.rmSync(folderPath, { recursive: true, force: true });
+      console.log(`[backup] Deleted old backup: ${entry.name}`);
+    }
+  } catch (err) {
+    console.error("[backup] Failed to clean old backups:", err);
+  }
+}
+
 export default function dataPlugin(): Plugin {
   return {
     name: "data-api",
     configureServer(server) {
+      // Initialize backup system
+      cleanOldBackups();
+      createBackup();
+      setInterval(createBackup, BACKUP_INTERVAL_MS);
+
       // SSE for SillyTavern textarea sync
       let latestTextarea = "";
       const sseClients = new Set<ServerResponse>();
