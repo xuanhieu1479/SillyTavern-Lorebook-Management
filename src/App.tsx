@@ -85,6 +85,14 @@ export default function App() {
   const highlightTimerRef = useRef<number | null>(null);
   const lastCtrlFRef = useRef(0);
 
+  // Refs for silent auto-copy (accessed inside SSE handler)
+  const entriesRef = useRef(entries);
+  const quickFilterRef = useRef(quickFilter);
+  const clipboardTemplateRef = useRef(clipboardTemplate);
+  entriesRef.current = entries;
+  quickFilterRef.current = quickFilter;
+  clipboardTemplateRef.current = clipboardTemplate;
+
   function toggleFavorite(name: string) {
     setFavorites((prev) => {
       if (prev.includes(name)) {
@@ -194,12 +202,34 @@ export default function App() {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        setStTextarea(data.content || "");
+        const content = data.content || "";
+        setStTextarea(content);
         setWsConnected(true);
 
         // Update liveCopied based on entry IDs found in chat
-        if (Array.isArray(data.chatEntryIds)) {
-          setLiveCopied(new Set(data.chatEntryIds));
+        const chatIds = new Set<string>(Array.isArray(data.chatEntryIds) ? data.chatEntryIds : []);
+        setLiveCopied(chatIds);
+
+        // Silent auto-copy: copy available quick-filtered entries to clipboard
+        if (content) {
+          const currentEntries = entriesRef.current;
+          const currentQuickFilter = quickFilterRef.current;
+          const currentTemplate = clipboardTemplateRef.current;
+
+          // Find disabled entries with matching keys that are in quickFilter and NOT in chat
+          const availableEntries = currentEntries.filter((e) => {
+            const isDisabled = Boolean((e.extra?._raw as Record<string, unknown> | undefined)?.disable);
+            const hasMatchingKey = e.keys.some((key) => keyMatches(key, content));
+            const inQuickFilter = currentQuickFilter.includes(e.id);
+            const notInChat = !chatIds.has(e.id);
+            return isDisabled && hasMatchingKey && inQuickFilter && notInChat;
+          });
+
+          if (availableEntries.length > 0) {
+            const combinedContent = availableEntries.map((e) => e.content).join("\n---\n");
+            const entryIds = availableEntries.map((e) => e.id);
+            navigator.clipboard.writeText(formatClipboard(currentTemplate, combinedContent, entryIds)).catch(() => {});
+          }
         }
       } catch { /* ignore invalid JSON */ }
     };
