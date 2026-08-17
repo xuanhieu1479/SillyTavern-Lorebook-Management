@@ -76,8 +76,8 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
         {tab === "clipboard" && (
           <div className="settings-tab-content">
             <p className="settings-hint">
-              Use <code>{"{{content}}"}</code> as a placeholder for the entry's content.
-              If omitted, the template text itself will be copied.
+              Use <code>{"{{content}}"}</code> for entry content and <code>{"{{id}}"}</code> for entry IDs (used for live tracking).
+              Multiple entries are joined with <code>---</code>.
             </p>
             <textarea
               className="settings-textarea"
@@ -88,7 +88,7 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
             />
             <div className="settings-preview">
               <label>Preview:</label>
-              <span>{formatClipboard(template, "ABC123")}</span>
+              <span>{formatClipboard(template, "Sample entry content", ["Category:42"])}</span>
             </div>
           </div>
         )}
