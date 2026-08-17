@@ -144,7 +144,6 @@ export interface AppSettings {
   clipboardTemplate?: string;
   favorites?: string[];
   quickFilter?: string[];
-  copied?: string[];
   maxFavorites?: number;
 }
 

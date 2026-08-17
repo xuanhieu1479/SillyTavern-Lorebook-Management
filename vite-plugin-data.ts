@@ -112,7 +112,15 @@ export default function dataPlugin(): Plugin {
 
       // SSE for SillyTavern textarea sync
       let latestTextarea = "";
+      let latestChatEntryIds: string[] = [];
       const sseClients = new Set<ServerResponse>();
+
+      // Extract entry IDs from text. IDs have format "CategoryName:uid"
+      function extractEntryIds(text: string): string[] {
+        const idPattern = /[\w\s\-']+:\d+/g;
+        const matches = text.match(idPattern) || [];
+        return matches.map(id => id.trim());
+      }
 
       // SSE for settings change notifications (e.g., when ST extension clears copied flags)
       const settingsSseClients = new Set<ServerResponse>();
@@ -178,7 +186,7 @@ export default function dataPlugin(): Plugin {
         res.flushHeaders();
 
         sseClients.add(res);
-        res.write(`data: ${JSON.stringify({ content: latestTextarea })}\n\n`);
+        res.write(`data: ${JSON.stringify({ content: latestTextarea, chatEntryIds: latestChatEntryIds })}\n\n`);
 
         req.on("close", () => sseClients.delete(res));
       });
@@ -202,10 +210,24 @@ export default function dataPlugin(): Plugin {
         req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
         req.on("end", () => {
           try {
-            const { content } = JSON.parse(body);
+            const { content, chatMessages } = JSON.parse(body);
             latestTextarea = content ?? "";
+
+            // Extract entry IDs from all chat messages
+            if (Array.isArray(chatMessages)) {
+              const allIds = new Set<string>();
+              for (const msg of chatMessages) {
+                if (typeof msg === "string") {
+                  for (const id of extractEntryIds(msg)) {
+                    allIds.add(id);
+                  }
+                }
+              }
+              latestChatEntryIds = [...allIds];
+            }
+
             for (const client of sseClients) {
-              client.write(`data: ${JSON.stringify({ content: latestTextarea })}\n\n`);
+              client.write(`data: ${JSON.stringify({ content: latestTextarea, chatEntryIds: latestChatEntryIds })}\n\n`);
             }
             res.setHeader("Access-Control-Allow-Origin", "*");
             res.setHeader("Content-Type", "application/json");
