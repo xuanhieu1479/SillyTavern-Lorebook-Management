@@ -122,6 +122,91 @@ export default function dataPlugin(): Plugin {
         return matches.map(id => id.trim());
       }
 
+      // Key matching logic (same as frontend)
+      function escapeRegex(str: string): string {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+
+      function keyMatches(key: string, text: string): boolean {
+        if (!key || !text) return false;
+        const baseKey = key.replace(/(\+{1,2}|s)$/i, '');
+        const pattern = new RegExp(`\\b${escapeRegex(baseKey)}(\\+{1,2}|s)?(?![a-zA-Z])`, 'i');
+        return pattern.test(text);
+      }
+
+      // Format clipboard content (same as frontend)
+      function formatClipboard(template: string, content: string, ids: string[]): string {
+        let result = template;
+        if (result.includes("{{content}}")) {
+          result = result.replaceAll("{{content}}", content);
+        }
+        if (result.includes("{{id}}") && ids.length > 0) {
+          result = result.replaceAll("{{id}}", ids.join("\n---\n"));
+        } else if (result.includes("{{id}}")) {
+          result = result.replaceAll("{{id}}", "");
+        }
+        return result;
+      }
+
+      // Load all entries from disk
+      function loadAllEntries(): Array<{ id: string; keys: string[]; content: string; disable: boolean }> {
+        const dataDir = getDataDir();
+        const files = listWorldFiles(dataDir);
+        const entries: Array<{ id: string; keys: string[]; content: string; disable: boolean }> = [];
+
+        for (const f of files) {
+          try {
+            const raw = fs.readFileSync(path.join(dataDir, f), "utf-8");
+            const data = JSON.parse(raw) as Record<string, unknown>;
+            const fileEntries = (data.entries as Record<string, unknown>) ?? {};
+            const fileName = f.replace(/\.json$/i, "");
+
+            for (const [, v] of Object.entries(fileEntries)) {
+              const entry = v as Record<string, unknown>;
+              const uid = entry.uid ?? 0;
+              const keys = (entry.key as string[]) ?? [];
+              const content = (entry.content as string) ?? "";
+              const disable = Boolean(entry.disable);
+
+              entries.push({
+                id: `${fileName}:${uid}`,
+                keys,
+                content,
+                disable,
+              });
+            }
+          } catch { /* ignore invalid files */ }
+        }
+
+        return entries;
+      }
+
+      // Calculate clipboard content for available entries
+      function calculateClipboardContent(textareaContent: string, chatEntryIds: string[]): string | null {
+        if (!textareaContent) return null;
+
+        const settings = readSettings();
+        const quickFilter = (settings.quickFilter as string[]) ?? [];
+        const template = (settings.clipboardTemplate as string) ?? "{{content}}";
+        const chatIds = new Set(chatEntryIds);
+
+        const allEntries = loadAllEntries();
+
+        // Find disabled entries with matching keys that are in quickFilter and NOT in chat
+        const availableEntries = allEntries.filter((e) => {
+          return e.disable &&
+            e.keys.some((key) => keyMatches(key, textareaContent)) &&
+            quickFilter.includes(e.id) &&
+            !chatIds.has(e.id);
+        });
+
+        if (availableEntries.length === 0) return null;
+
+        const combinedContent = availableEntries.map((e) => e.content).join("\n---\n");
+        const entryIds = availableEntries.map((e) => e.id);
+        return formatClipboard(template, combinedContent, entryIds);
+      }
+
       // SSE for settings change notifications (e.g., when ST extension clears copied flags)
       const settingsSseClients = new Set<ServerResponse>();
 
@@ -229,9 +314,13 @@ export default function dataPlugin(): Plugin {
             for (const client of sseClients) {
               client.write(`data: ${JSON.stringify({ content: latestTextarea, chatEntryIds: latestChatEntryIds })}\n\n`);
             }
+
+            // Calculate clipboard content for available entries
+            const clipboardContent = calculateClipboardContent(latestTextarea, latestChatEntryIds);
+
             res.setHeader("Access-Control-Allow-Origin", "*");
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ ok: true }));
+            res.end(JSON.stringify({ ok: true, clipboardContent }));
           } catch {
             res.statusCode = 400;
             res.end();
