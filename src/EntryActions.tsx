@@ -4,7 +4,7 @@ import type { Entry, Category } from "./types";
 interface Props {
   entry: Entry;
   categories: Category[];
-  onCopy?: (content: string) => void;
+  onCopy?: (content: string, id: string) => void;
   onEdit?: () => void;
   onDuplicate: (id: string) => void;
   onMove: (id: string, categoryId: string) => void;
@@ -35,7 +35,7 @@ export default function EntryActions({ entry, categories, onCopy, onEdit, onDupl
         <button
           className="btn-icon btn-copy"
           title="Copy to clipboard"
-          onClick={() => { onCopy(entry.content); onEdit?.(); }}
+          onClick={() => { onCopy(entry.content, entry.id); onEdit?.(); }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="9" y="9" width="13" height="13" rx="2"/>

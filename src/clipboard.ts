@@ -2,21 +2,48 @@ export const DEFAULT_TEMPLATE = "{{content}}";
 
 const ENTRY_SEPARATOR = "\n---\n";
 
-export function formatClipboard(template: string, content: string, ids?: string[]): string {
-  let result = template;
+interface ClipboardEntry {
+  id: string;
+  content: string;
+}
 
-  if (result.includes("{{content}}")) {
-    result = result.replaceAll("{{content}}", content);
+export function formatClipboard(template: string, entries: ClipboardEntry[]): string {
+  if (entries.length === 0) {
+    return template.replaceAll("{{content}}", "").replaceAll("{{id}}", "");
   }
 
-  if (result.includes("{{id}}") && ids && ids.length > 0) {
-    const combinedIds = ids.join(ENTRY_SEPARATOR);
-    result = result.replaceAll("{{id}}", combinedIds);
-  } else if (result.includes("{{id}}")) {
-    result = result.replaceAll("{{id}}", "");
+  const hasId = template.includes("{{id}}");
+  const hasContent = template.includes("{{content}}");
+
+  if (!hasId && !hasContent) {
+    return template;
   }
 
-  return result;
+  // Find the per-entry portion of the template (from first placeholder to last)
+  const idIndex = hasId ? template.indexOf("{{id}}") : Infinity;
+  const contentIndex = hasContent ? template.indexOf("{{content}}") : Infinity;
+  const idEndIndex = hasId ? idIndex + "{{id}}".length : 0;
+  const contentEndIndex = hasContent ? contentIndex + "{{content}}".length : 0;
+
+  const startIdx = Math.min(idIndex, contentIndex);
+  const endIdx = Math.max(idEndIndex, contentEndIndex);
+
+  const prefix = template.slice(0, startIdx);
+  const perEntryTemplate = template.slice(startIdx, endIdx);
+  const suffix = template.slice(endIdx);
+
+  // Format each entry using the per-entry template
+  const formattedEntries = entries.map(e => {
+    let formatted = perEntryTemplate;
+    if (hasId) formatted = formatted.replaceAll("{{id}}", e.id);
+    if (hasContent) formatted = formatted.replaceAll("{{content}}", e.content);
+    return formatted;
+  });
+
+  // Join entries with separator
+  const joined = formattedEntries.join(ENTRY_SEPARATOR);
+
+  return prefix + joined + suffix;
 }
 
 // Extract entry IDs from text. IDs have format "CategoryName:uid"

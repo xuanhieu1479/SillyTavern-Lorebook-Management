@@ -13,7 +13,7 @@ interface Props {
   highlightId: string | null;
   onDuplicate: (id: string) => void;
   onMove: (id: string, categoryId: string) => void;
-  onCopy: (content: string) => void;
+  onCopy: (content: string, id: string) => void;
   onToggleDisabled: (id: string) => void;
   quickFilter: string[];
 }

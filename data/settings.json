@@ -1,5 +1,5 @@
 {
-  "clipboardTemplate": "[OOC: Context ID: {{id}}\nBackground context:\n{{content}}]",
+  "clipboardTemplate": "[OOC: Background context:\n{{id}}\n{{content}}]",
   "favorites": [
     "General - Inventory",
     "Re:Zero - Wayfarer Mansion",

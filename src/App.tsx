@@ -256,9 +256,8 @@ export default function App() {
     const selectedEntries = liveSection.filter((e) => liveSelected.has(e.id));
     if (selectedEntries.length === 0) return;
 
-    const combinedContent = selectedEntries.map((e) => e.content).join("\n---\n");
-    const entryIds = selectedEntries.map((e) => e.id);
-    navigator.clipboard.writeText(formatClipboard(clipboardTemplate, combinedContent, entryIds));
+    const clipboardEntries = selectedEntries.map((e) => ({ id: e.id, content: e.content }));
+    navigator.clipboard.writeText(formatClipboard(clipboardTemplate, clipboardEntries));
 
     showToast(`Copied ${selectedEntries.length} entries`, "success");
     setLiveSelected(new Set());
@@ -499,8 +498,8 @@ export default function App() {
             highlightId={highlightId}
             onDuplicate={handleDuplicate}
             onMove={handleMove}
-            onCopy={(content) => {
-              navigator.clipboard.writeText(formatClipboard(clipboardTemplate, content));
+            onCopy={(content, id) => {
+              navigator.clipboard.writeText(formatClipboard(clipboardTemplate, [{ id: id || "", content }]));
               showToast("Copied to clipboard", "success");
             }}
             onToggleDisabled={handleToggleDisabled}

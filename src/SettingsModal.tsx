@@ -88,7 +88,7 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
             />
             <div className="settings-preview">
               <label>Preview:</label>
-              <span>{formatClipboard(template, "Sample entry content", ["Category:42"])}</span>
+              <span>{formatClipboard(template, [{ id: "Category:42", content: "Sample entry content" }])}</span>
             </div>
           </div>
         )}
