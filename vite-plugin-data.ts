@@ -115,11 +115,10 @@ export default function dataPlugin(): Plugin {
       let latestChatEntryIds: string[] = [];
       const sseClients = new Set<ServerResponse>();
 
-      // Extract entry IDs from text. IDs have format "CategoryName:uid"
+      // Extract entry IDs from text. Format: "Category Name:123"
       function extractEntryIds(text: string): string[] {
-        const idPattern = /[\w\s\-']+:\d+/g;
-        const matches = text.match(idPattern) || [];
-        return matches.map(id => id.trim());
+        const idPattern = /[A-Z][A-Za-z \-']*:\d+/g;
+        return text.match(idPattern) || [];
       }
 
       // Key matching logic (same as frontend)
