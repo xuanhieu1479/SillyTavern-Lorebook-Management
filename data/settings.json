@@ -3,7 +3,9 @@
   "favorites": [
     "General - Inventory",
     "Re:Zero - Wayfarer Mansion",
-    "Arifureta - Apostles+"
+    "Arifureta - Apostles+",
+    "General - Financial Resource",
+    "General - Mana Resource"
   ],
   "quickFilter": [
     "Eternal Servitude Main Cast:1",
@@ -115,7 +117,13 @@
     "Main World:0",
     "Local Support Cast:55",
     "Local Support Cast:57",
-    "Local Support Cast:58"
+    "Local Support Cast:58",
+    "Nox's Clothes:8",
+    "Local Main Cast:29",
+    "Main World:39",
+    "Main World:10",
+    "Main World:38",
+    "Main World:27"
   ],
   "maxFavorites": 5,
   "copied": []
