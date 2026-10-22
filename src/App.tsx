@@ -48,6 +48,7 @@ function generateId(): string {
 }
 
 const DEFAULT_MAX_FAVORITES = 5;
+const SEARCH_DEBOUNCE_MS = 500;
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -65,6 +66,7 @@ export default function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchMode, setSearchMode] = useState<SearchMode>("name");
   const [filterCat, setFilterCat] = useState("");
   const [editing, setEditing] = useState<Entry | null>(null);
@@ -166,6 +168,12 @@ export default function App() {
     loadFromDisk();
   }, [loadFromDisk]);
 
+  // Debounce search input so results only recompute after typing pauses
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // Ctrl+F to focus search; Ctrl+F+F (within 500ms) for browser search
   useEffect(() => {
     function handleCtrlF(e: KeyboardEvent) {
@@ -241,7 +249,7 @@ export default function App() {
   const liveSection = allKeyMatches.filter((e) => !liveCopied.has(e.id));
 
   // Main list: normal filtered entries (no live section mixing)
-  const displayEntries = searchEntries(filterByCategory(entries, filterCat), search, searchMode).map((r) => r.entry);
+  const displayEntries = searchEntries(filterByCategory(entries, filterCat), debouncedSearch, searchMode).map((r) => r.entry);
 
   // Bulk action handlers for live selection
   const handleLiveSelectAll = useCallback(() => {
@@ -461,7 +469,10 @@ export default function App() {
                 {search && (
                   <button
                     className="search-clear-btn"
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearch("");
+                      setDebouncedSearch("");
+                    }}
                     type="button"
                     title="Clear search"
                   >
@@ -561,7 +572,7 @@ export default function App() {
             onToggleFavorite={editing ? () => toggleFavorite(editing.name) : undefined}
             isQuickFilter={editing ? quickFilter.includes(editing.id) : false}
             onToggleQuickFilter={editing ? () => toggleQuickFilter(editing.id) : undefined}
-            searchQuery={search}
+            searchQuery={debouncedSearch}
             searchMode={searchMode}
           />
         </div>
