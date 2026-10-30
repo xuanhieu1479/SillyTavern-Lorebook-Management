@@ -917,6 +917,28 @@ header h1 {
   resize: none;
 }
 
+.settings-favorites {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-favorites li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--text-h);
+}
+
 .settings-input {
   font-family: monospace;
   font-size: 13px;

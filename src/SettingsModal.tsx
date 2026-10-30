@@ -5,24 +5,26 @@ import { DEFAULT_TEMPLATE, formatClipboard } from "./clipboard";
 interface Props {
   clipboardTemplate: string;
   dataDir: string;
-  onSave: (update: { clipboardTemplate: string; dataDir: string }) => void;
+  favorites: string[];
+  onSave: (update: { clipboardTemplate: string; dataDir: string; favorites: string[] }) => void;
   onClose: () => void;
 }
 
-type Tab = "data" | "clipboard";
+type Tab = "data" | "clipboard" | "favorites";
 
-export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onClose }: Props) {
+export default function SettingsModal({ clipboardTemplate, dataDir, favorites, onSave, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("data");
   const [dataDirInput, setDataDirInput] = useState(dataDir);
   const [template, setTemplate] = useState(clipboardTemplate || DEFAULT_TEMPLATE);
+  const [favoriteList, setFavoriteList] = useState(favorites);
 
   const handleSave = useCallback(() => {
     const trimmedDir = dataDirInput.trim();
-    saveSettings({ clipboardTemplate: template });
+    saveSettings({ clipboardTemplate: template, favorites: favoriteList });
     saveDataSource({ dataDir: trimmedDir });
-    onSave({ clipboardTemplate: template, dataDir: trimmedDir });
+    onSave({ clipboardTemplate: template, dataDir: trimmedDir, favorites: favoriteList });
     onClose();
-  }, [dataDirInput, template, onSave, onClose]);
+  }, [dataDirInput, template, favoriteList, onSave, onClose]);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -51,6 +53,12 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
             onClick={() => setTab("clipboard")}
           >
             Clipboard
+          </button>
+          <button
+            className={`settings-tab${tab === "favorites" ? " active" : ""}`}
+            onClick={() => setTab("favorites")}
+          >
+            Favorites
           </button>
         </div>
 
@@ -90,6 +98,31 @@ export default function SettingsModal({ clipboardTemplate, dataDir, onSave, onCl
               <label>Preview:</label>
               <span>{formatClipboard(template, [{ id: "Category:42", content: "Sample entry content" }])}</span>
             </div>
+          </div>
+        )}
+
+        {tab === "favorites" && (
+          <div className="settings-tab-content">
+            <p className="settings-hint">
+              Remove favorites here. To add one, open an entry and click its star.
+            </p>
+            {favoriteList.length === 0 ? (
+              <p className="settings-hint">No favorites.</p>
+            ) : (
+              <ul className="settings-favorites">
+                {favoriteList.map((name) => (
+                  <li key={name}>
+                    <span>{name}</span>
+                    <button
+                      className="btn-clear"
+                      onClick={() => setFavoriteList((prev) => prev.filter((f) => f !== name))}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

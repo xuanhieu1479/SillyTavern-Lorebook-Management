@@ -47,7 +47,6 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-const DEFAULT_MAX_FAVORITES = 5;
 const SEARCH_DEBOUNCE_MS = 500;
 
 function escapeRegex(str: string): string {
@@ -77,7 +76,6 @@ export default function App() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [quickFilter, setQuickFilter] = useState<string[]>([]);
-  const [maxFavorites, setMaxFavorites] = useState(DEFAULT_MAX_FAVORITES);
   const [stTextarea, setStTextarea] = useState("");
   const [wsConnected, setWsConnected] = useState(false);
   const [liveSelected, setLiveSelected] = useState<Set<string>>(new Set());
@@ -90,16 +88,9 @@ export default function App() {
 
   function toggleFavorite(name: string) {
     setFavorites((prev) => {
-      if (prev.includes(name)) {
-        const next = prev.filter((f) => f !== name);
-        saveSettings({ favorites: next });
-        return next;
-      }
-      if (prev.length >= maxFavorites) {
-        showToast(`Maximum ${maxFavorites} favorites allowed.`, "error");
-        return prev;
-      }
-      const next = [...prev, name];
+      const next = prev.includes(name)
+        ? prev.filter((f) => f !== name)
+        : [...prev, name];
       saveSettings({ favorites: next });
       return next;
     });
@@ -157,7 +148,6 @@ export default function App() {
       setDataDir(dataSource.dataDir ?? "");
       setFavorites(settings.favorites ?? []);
       setQuickFilter(settings.quickFilter ?? []);
-      setMaxFavorites(settings.maxFavorites ?? DEFAULT_MAX_FAVORITES);
     } catch (err) {
       console.error("Failed to load from disk:", err);
     }
@@ -601,9 +591,11 @@ export default function App() {
         <SettingsModal
           clipboardTemplate={clipboardTemplate}
           dataDir={dataDir}
-          onSave={({ clipboardTemplate: ct, dataDir: dd }) => {
+          favorites={favorites}
+          onSave={({ clipboardTemplate: ct, dataDir: dd, favorites: favs }) => {
             setClipboardTemplate(ct);
             setDataDir(dd);
+            setFavorites(favs);
           }}
           onClose={() => setShowSettings(false)}
         />

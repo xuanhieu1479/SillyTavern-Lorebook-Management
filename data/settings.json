@@ -1,11 +1,11 @@
 {
   "clipboardTemplate": "[OOC: Background context:\n{{id}}\n{{content}}]",
   "favorites": [
-    "General - Inventory",
     "Re:Zero - Wayfarer Mansion",
     "Arifureta - Apostles+",
     "General - Financial Resource",
-    "General - Mana Resource"
+    "General - Mana Resource",
+    "General - Supernatural Resource"
   ],
   "quickFilter": [
     "Eternal Servitude Main Cast:1",
@@ -132,8 +132,8 @@
     "World Canon:16",
     "World Canon:1",
     "World Canon:2",
-    "Collected Tech:35"
+    "Collected Tech:35",
+    "Local Support Cast:73"
   ],
-  "maxFavorites": 5,
   "copied": []
 }
