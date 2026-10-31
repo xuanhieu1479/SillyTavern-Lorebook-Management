@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import {
   Badge, Box, Button, Card, Checkbox, Dialog, DropdownMenu, Flex, Heading, IconButton,
-  ScrollArea, Select, Separator, Switch, Text, TextField, Theme, Tooltip,
+  ScrollArea, Select, Separator, Switch, Text, Theme, Tooltip,
 } from "@radix-ui/themes";
 import {
-  Cross2Icon, DesktopIcon, ExternalLinkIcon, GearIcon, MagnifyingGlassIcon, MoonIcon,
+  DesktopIcon, ExternalLinkIcon, GearIcon, MoonIcon,
   PlusIcon, ReloadIcon, StackIcon, SunIcon,
 } from "@radix-ui/react-icons";
 import type { Entry, Category } from "./types";
@@ -47,6 +47,7 @@ import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
 import CategoryManager from "./CategoryManager";
 import SettingsModal from "./SettingsModal";
+import SearchInput from "./SearchInput";
 import { formatClipboard } from "./clipboard";
 import { searchEntries, filterByCategory, type SearchMode } from "./search";
 import "./App.css";
@@ -55,7 +56,6 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-const SEARCH_DEBOUNCE_MS = 500;
 const ALL_CATEGORIES = "__all__";
 
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -82,7 +82,6 @@ function keyMatches(key: string, text: string): boolean {
 export default function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchMode, setSearchMode] = useState<SearchMode>("name");
   const [filterCat, setFilterCat] = useState("");
@@ -176,12 +175,6 @@ export default function App() {
     loadFromDisk();
   }, [loadFromDisk]);
 
-  // Debounce search input so results only recompute after typing pauses
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [search]);
-
   // Ctrl+F to focus search; Ctrl+F+F (within 500ms) for browser search
   useEffect(() => {
     function handleCtrlF(e: KeyboardEvent) {
@@ -233,29 +226,35 @@ export default function App() {
     saveCategoryFile(name, catEntries, cat?.extras ?? {});
   }, [categories]);
 
-  const liveMatches = stTextarea
-    ? entries.filter((e) =>
-        e.keys.some((key) => keyMatches(key, stTextarea)) &&
-        quickFilter.includes(e.id)
-      )
-    : [];
+  // Memoized so unrelated re-renders (e.g. each keystroke in the search box)
+  // don't re-run key regexes and searches over every entry.
+  const keyMatchedEntries = useMemo(
+    () => (stTextarea ? entries.filter((e) => e.keys.some((key) => keyMatches(key, stTextarea))) : []),
+    [entries, stTextarea],
+  );
 
-  const liveMatchIds = new Set(liveMatches.map((e) => e.id));
+  const liveMatches = useMemo(
+    () => keyMatchedEntries.filter((e) => quickFilter.includes(e.id)),
+    [keyMatchedEntries, quickFilter],
+  );
+
+  const liveMatchIds = useMemo(() => new Set(liveMatches.map((e) => e.id)), [liveMatches]);
 
   // All disabled entries with matching keys (for display in live section)
-  const allKeyMatches = stTextarea
-    ? entries.filter((e) => {
-        const isDisabled = Boolean((e.extra?._raw as Record<string, unknown> | undefined)?.disable);
-        return isDisabled && e.keys.some((key) => keyMatches(key, stTextarea));
-      })
-    : [];
+  const allKeyMatches = useMemo(
+    () => keyMatchedEntries.filter((e) => Boolean((e.extra?._raw as Record<string, unknown> | undefined)?.disable)),
+    [keyMatchedEntries],
+  );
   const hasKeyMatches = allKeyMatches.length > 0;
 
   // Live section: all entries with matching keys that are NOT already in chat
-  const liveSection = allKeyMatches.filter((e) => !liveCopied.has(e.id));
+  const liveSection = useMemo(() => allKeyMatches.filter((e) => !liveCopied.has(e.id)), [allKeyMatches, liveCopied]);
 
   // Main list: normal filtered entries (no live section mixing)
-  const displayEntries = searchEntries(filterByCategory(entries, filterCat), debouncedSearch, searchMode).map((r) => r.entry);
+  const displayEntries = useMemo(
+    () => searchEntries(filterByCategory(entries, filterCat), debouncedSearch, searchMode).map((r) => r.entry),
+    [entries, filterCat, debouncedSearch, searchMode],
+  );
 
   // Bulk action handlers for live selection
   const handleLiveSelectAll = useCallback(() => {
@@ -485,33 +484,7 @@ export default function App() {
         <Flex className="main-layout">
           <Flex direction="column" className="left-panel">
             <Flex direction="column" gap="2" flexShrink="0" px="3" py="3" className="bordered-bottom surface">
-              <TextField.Root
-                ref={searchInputRef}
-                placeholder="Search... (quotes for phrase, | for OR)"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              >
-                <TextField.Slot>
-                  <MagnifyingGlassIcon />
-                </TextField.Slot>
-                {search && (
-                  <TextField.Slot>
-                    <IconButton
-                      type="button"
-                      size="1"
-                      variant="ghost"
-                      color="gray"
-                      aria-label="Clear search"
-                      onClick={() => {
-                        setSearch("");
-                        setDebouncedSearch("");
-                      }}
-                    >
-                      <Cross2Icon />
-                    </IconButton>
-                  </TextField.Slot>
-                )}
-              </TextField.Root>
+              <SearchInput inputRef={searchInputRef} onSearch={setDebouncedSearch} />
               <Flex gap="2">
                 <Box flexGrow="1" minWidth="0">
                   <Select.Root

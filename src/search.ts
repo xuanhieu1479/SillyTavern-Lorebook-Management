@@ -177,36 +177,49 @@ function scoreTermInField(term: ParsedTerm, fieldTokens: string[], fieldWeight: 
   return { matched: false, isPhrase: false, score: 0 };
 }
 
-function scoreTermInEntry(
-  term: ParsedTerm,
-  nameTokens: string[],
-  keyTokens: string[][],
-  contentTokens: string[],
-  mode: SearchMode,
-): number {
-  if (mode === "name") {
-    let best = 0;
-    const nameMatch = scoreTermInField(term, nameTokens, FIELD_WEIGHTS.name);
-    if (nameMatch.matched) best = nameMatch.score;
-    for (const tokens of keyTokens) {
-      const keyMatch = scoreTermInField(term, tokens, FIELD_WEIGHTS.keys);
-      if (keyMatch.matched) best = Math.max(best, keyMatch.score);
-    }
-    return best;
-  } else {
-    const contentMatch = scoreTermInField(term, contentTokens, FIELD_WEIGHTS.content);
-    if (contentMatch.matched) return contentMatch.score;
-  }
+interface SearchField {
+  tokens: string[];
+  weight: number;
+}
 
-  return 0;
+interface EntryFields {
+  name: SearchField[];
+  content?: SearchField[];
+}
+
+// Entries are replaced rather than mutated on edit, so tokenized fields can be
+// cached per entry object and reused across searches.
+const fieldCache = new WeakMap<Entry, EntryFields>();
+
+function getSearchFields(entry: Entry, mode: SearchMode): SearchField[] {
+  let cached = fieldCache.get(entry);
+  if (!cached) {
+    cached = {
+      name: [
+        { tokens: tokenize(entry.name), weight: FIELD_WEIGHTS.name },
+        ...entry.keys.map((key) => ({ tokens: tokenize(key), weight: FIELD_WEIGHTS.keys })),
+      ],
+    };
+    fieldCache.set(entry, cached);
+  }
+  if (mode === "name") return cached.name;
+  cached.content ??= [{ tokens: tokenize(entry.content), weight: FIELD_WEIGHTS.content }];
+  return cached.content;
+}
+
+function scoreTermInEntry(term: ParsedTerm, fields: SearchField[]): number {
+  let best = 0;
+  for (const field of fields) {
+    const match = scoreTermInField(term, field.tokens, field.weight);
+    if (match.matched) best = Math.max(best, match.score);
+  }
+  return best;
 }
 
 function scoreEntry(entry: Entry, query: ParsedQuery, mode: SearchMode): number {
   if (query.orGroups.length === 0) return 0;
 
-  const nameTokens = tokenize(entry.name);
-  const keyTokens = entry.keys.map(tokenize);
-  const contentTokens = tokenize(entry.content);
+  const fields = getSearchFields(entry, mode);
 
   let totalScore = 0;
 
@@ -215,7 +228,7 @@ function scoreEntry(entry: Entry, query: ParsedQuery, mode: SearchMode): number 
     let bestGroupScore = 0;
 
     for (const term of group) {
-      const termScore = scoreTermInEntry(term, nameTokens, keyTokens, contentTokens, mode);
+      const termScore = scoreTermInEntry(term, fields);
       if (termScore > 0) {
         groupMatched = true;
         bestGroupScore = Math.max(bestGroupScore, termScore);
