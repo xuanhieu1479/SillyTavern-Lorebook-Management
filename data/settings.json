@@ -30,7 +30,6 @@
     "Eternal Servitude Support Cast:2",
     "Eternal Servitude Support Cast:17",
     "Eternal Servitude Support Cast:19",
-    "Local Main Cast:3",
     "Local Main Cast:6",
     "Local Main Cast:9",
     "Local Main Cast:15",
@@ -133,7 +132,8 @@
     "World Canon:1",
     "World Canon:2",
     "Collected Tech:35",
-    "Local Support Cast:73"
+    "Local Support Cast:73",
+    "Local Main Cast:3"
   ],
   "copied": [],
   "untrackedFiles": [
@@ -145,5 +145,6 @@
     "Fate.json",
     "Eldoria.json",
     "Destiny.json"
-  ]
+  ],
+  "appearance": "system"
 }
