@@ -49,6 +49,7 @@ import CategoryManager from "./CategoryManager";
 import SettingsModal from "./SettingsModal";
 import SearchInput from "./SearchInput";
 import { formatClipboard } from "./clipboard";
+import { buildParentMap } from "./grouping";
 import { searchEntries, filterByCategory, type SearchMode } from "./search";
 import "./App.css";
 
@@ -249,6 +250,9 @@ export default function App() {
 
   // Live section: all entries with matching keys that are NOT already in chat
   const liveSection = useMemo(() => allKeyMatches.filter((e) => !liveCopied.has(e.id)), [allKeyMatches, liveCopied]);
+
+  // Built from all entries so grouping doesn't shift as search/filters hide entries
+  const parentOf = useMemo(() => buildParentMap(entries), [entries]);
 
   // Main list: normal filtered entries (no live section mixing)
   const displayEntries = useMemo(
@@ -513,6 +517,7 @@ export default function App() {
             </Flex>
             <EntryList
               entries={displayEntries}
+              parentOf={parentOf}
               categories={categories}
               onEdit={handleEdit}
               onDelete={handleDelete}

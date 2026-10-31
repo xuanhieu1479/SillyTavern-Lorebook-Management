@@ -55,7 +55,7 @@
 }
 
 .left-panel {
-  width: 25%;
+  width: 30%;
   flex-shrink: 0;
   min-height: 0;
   border-right: 1px solid var(--gray-a5);
@@ -105,6 +105,30 @@
 }
 
 .entry-card[data-disabled] {
+  opacity: 0.5;
+}
+
+/* Collapsed child entry */
+.entry-row {
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-2);
+}
+
+.entry-row:hover {
+  background: var(--gray-a3);
+}
+
+.entry-row[data-selected] {
+  background: var(--accent-a3);
+}
+
+.entry-row[data-quick-filtered] {
+  background: var(--amber-a3);
+}
+
+.entry-row[data-disabled] {
   opacity: 0.5;
 }
 
