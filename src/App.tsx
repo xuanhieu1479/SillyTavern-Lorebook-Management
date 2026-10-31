@@ -150,6 +150,7 @@ export default function App() {
             id: `${file.fileName}:${entryUid}`,
             name: (v.comment as string) ?? "",
             keys: (v.key as string[]) ?? [],
+            secondaryKeys: (v.keysecondary as string[]) ?? [],
             content: (v.content as string) ?? "",
             category: catId,
             extra: { _raw: v },
@@ -229,8 +230,11 @@ export default function App() {
 
   // Memoized so unrelated re-renders (e.g. each keystroke in the search box)
   // don't re-run key regexes and searches over every entry.
+  // Primary and secondary keys are treated alike: any single match counts.
   const keyMatchedEntries = useMemo(
-    () => (stTextarea ? entries.filter((e) => e.keys.some((key) => keyMatches(key, stTextarea))) : []),
+    () => (stTextarea
+      ? entries.filter((e) => [...e.keys, ...e.secondaryKeys].some((key) => keyMatches(key, stTextarea)))
+      : []),
     [entries, stTextarea],
   );
 
@@ -292,10 +296,10 @@ export default function App() {
     });
   }, []);
 
-  const handleSave = useCallback((name: string, keys: string[], content: string, category: string) => {
+  const handleSave = useCallback((name: string, keys: string[], secondaryKeys: string[], content: string, category: string) => {
     if (editing) {
       const oldCategory = editing.category;
-      const updatedEntry = { ...editing, name, keys, content, category };
+      const updatedEntry = { ...editing, name, keys, secondaryKeys, content, category };
       setEntries((prev) => {
         const next = prev.map((e) => (e.id === editing.id ? updatedEntry : e));
         syncCategoryToDisk(category, next);
@@ -314,6 +318,7 @@ export default function App() {
           id: `${catName}:${newRaw.uid}`,
           name,
           keys,
+          secondaryKeys,
           content,
           category,
           extra: { _raw: newRaw },

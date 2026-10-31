@@ -91,6 +91,7 @@ function entriesToSillyTavern(entries: Entry[], fileExtras: Record<string, unkno
       out = {
         ...raw,
         key: entry.keys,
+        keysecondary: entry.secondaryKeys,
         comment: entry.name,
         content: entry.content,
       };
@@ -100,7 +101,7 @@ function entriesToSillyTavern(entries: Entry[], fileExtras: Record<string, unkno
       out = {
         uid,
         key: entry.keys,
-        keysecondary: [],
+        keysecondary: entry.secondaryKeys,
         comment: entry.name,
         content: entry.content,
         displayIndex: i,

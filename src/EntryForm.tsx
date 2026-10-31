@@ -7,7 +7,7 @@ import { getHighlightRanges, type SearchMode } from "./search";
 interface Props {
   editing: Entry | null;
   categories: Category[];
-  onSave: (name: string, keys: string[], content: string, category: string) => void;
+  onSave: (name: string, keys: string[], secondaryKeys: string[], content: string, category: string) => void;
   onCancel: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
@@ -17,6 +17,10 @@ interface Props {
   searchMode?: SearchMode;
 }
 
+function parseKeys(input: string): string[] {
+  return input.split(",").map((k) => k.trim()).filter(Boolean);
+}
+
 export interface EntryFormHandle {
   submit: () => void;
 }
@@ -24,6 +28,7 @@ export interface EntryFormHandle {
 const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onSave, onCancel, isFavorite, onToggleFavorite, isQuickFilter, onToggleQuickFilter, searchQuery, searchMode }, ref) => {
   const [name, setName] = useState("");
   const [keysInput, setKeysInput] = useState("");
+  const [secondaryKeysInput, setSecondaryKeysInput] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
   const [error, setError] = useState("");
@@ -39,14 +44,17 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
   useEffect(() => {
     if (editing) {
       const loadedKeys = editing.keys.join(", ");
+      const loadedSecondaryKeys = editing.secondaryKeys.join(", ");
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync form state when editing prop changes
       if (name !== editing.name) setName(editing.name);
       if (keysInput !== loadedKeys) setKeysInput(loadedKeys);
+      if (secondaryKeysInput !== loadedSecondaryKeys) setSecondaryKeysInput(loadedSecondaryKeys);
       if (content !== editing.content) setContent(editing.content);
       if (category !== editing.category) setCategory(editing.category);
     } else {
       setName("");
       setKeysInput("");
+      setSecondaryKeysInput("");
       setContent("");
       setCategory("");
     }
@@ -57,21 +65,21 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
   useEffect(() => {
     if (!editing) return;
     const loadedKeys = editing.keys.join(", ");
-    if (name === editing.name && keysInput === loadedKeys && content === editing.content && category === editing.category) {
+    const loadedSecondaryKeys = editing.secondaryKeys.join(", ");
+    if (name === editing.name && keysInput === loadedKeys && secondaryKeysInput === loadedSecondaryKeys && content === editing.content && category === editing.category) {
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
       const trimmedName = name.trim();
-      const keys = keysInput.split(",").map((k) => k.trim()).filter(Boolean);
       if (trimmedName && category) {
-        onSave(trimmedName, keys, content, category);
+        onSave(trimmedName, parseKeys(keysInput), parseKeys(secondaryKeysInput), content, category);
       }
     }, 500);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [editing, name, keysInput, content, category, onSave]);
+  }, [editing, name, keysInput, secondaryKeysInput, content, category, onSave]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -153,19 +161,16 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
       setError("Name is required.");
       return;
     }
-    const keys = keysInput
-      .split(",")
-      .map((k) => k.trim())
-      .filter(Boolean);
     if (!category) {
       setError("Please select a category.");
       return;
     }
     setError("");
-    onSave(name.trim(), keys, content, category);
+    onSave(name.trim(), parseKeys(keysInput), parseKeys(secondaryKeysInput), content, category);
     if (!editing) {
       setName("");
       setKeysInput("");
+      setSecondaryKeysInput("");
       setContent("");
     }
   }
@@ -195,7 +200,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
             </Select.Content>
           </Select.Root>
         </Flex>
-        <Flex direction="column" gap="1" flexGrow="1">
+        <Flex direction="column" gap="1" flexGrow="1" flexBasis="0" minWidth="0">
           <Text as="label" size="2" weight="bold">Name</Text>
           <TextField.Root
             value={name}
@@ -203,11 +208,19 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
             placeholder="Entry name"
           />
         </Flex>
-        <Flex direction="column" gap="1" flexGrow="1">
+        <Flex direction="column" gap="1" flexGrow="1" flexBasis="0" minWidth="0">
           <Text as="label" size="2" weight="bold">Keys</Text>
           <TextField.Root
             value={keysInput}
             onChange={(e) => { setKeysInput(e.target.value); setError(""); }}
+            placeholder="key1, key2, key3"
+          />
+        </Flex>
+        <Flex direction="column" gap="1" flexGrow="1" flexBasis="0" minWidth="0">
+          <Text as="label" size="2" weight="bold">Secondary keys</Text>
+          <TextField.Root
+            value={secondaryKeysInput}
+            onChange={(e) => { setSecondaryKeysInput(e.target.value); setError(""); }}
             placeholder="key1, key2, key3"
           />
         </Flex>

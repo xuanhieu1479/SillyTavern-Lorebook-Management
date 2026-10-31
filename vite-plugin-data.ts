@@ -194,7 +194,8 @@ export default function dataPlugin(): Plugin {
             for (const [, v] of Object.entries(fileEntries)) {
               const entry = v as Record<string, unknown>;
               const uid = entry.uid ?? 0;
-              const keys = (entry.key as string[]) ?? [];
+              // Primary and secondary keys are matched alike: any single match counts.
+              const keys = [...((entry.key as string[]) ?? []), ...((entry.keysecondary as string[]) ?? [])];
               const content = (entry.content as string) ?? "";
               const disable = Boolean(entry.disable);
 
