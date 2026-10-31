@@ -55,7 +55,7 @@
 }
 
 .left-panel {
-  width: 30%;
+  width: 25%;
   flex-shrink: 0;
   min-height: 0;
   border-right: 1px solid var(--gray-a5);
@@ -64,6 +64,26 @@
 .right-panel {
   flex: 1;
   min-height: 0;
+}
+
+.search-rules-icon {
+  transform: rotate(180deg);
+  color: var(--gray-a11);
+  cursor: help;
+}
+
+.search-rules-tooltip {
+  max-width: 460px;
+}
+
+/* Tooltips use inverted colors, so inherit the text color instead of theme colors. */
+.search-rules-example {
+  font-family: var(--code-font-family);
+  font-weight: bold;
+}
+
+.search-rules-note {
+  opacity: 0.7;
 }
 
 /* Header */

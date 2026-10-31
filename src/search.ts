@@ -2,10 +2,17 @@ import type { Entry } from "./types";
 
 export type SearchMode = "name" | "content";
 
+// A query word. Plain words match the start of a target word; words with
+// wildcards (* = any letters, ? = one letter) must match the whole word.
+interface QueryToken {
+  text: string;
+  pattern: RegExp | null;
+}
+
 interface ParsedTerm {
   type: "phrase" | "token";
   value: string;
-  tokens: string[];
+  tokens: QueryToken[];
   isOr: boolean;
 }
 
@@ -24,8 +31,30 @@ const PROXIMITY_BONUS = 20;
 const EXACT_PHRASE_BONUS = 30;
 const EXACT_TOKEN_BONUS = 40;
 
+const WORD_CHAR = "a-z0-9À-ɏ";
+
 function tokenize(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9À-ɏ]+/i).filter(Boolean);
+}
+
+// Regex source for a query word, with * and ? expanded to word characters.
+// Query words contain only word characters and wildcards, so nothing needs escaping.
+function wildcardSource(text: string): string {
+  return text.replace(/[*?]/g, (c) => (c === "*" ? `[${WORD_CHAR}]*` : `[${WORD_CHAR}]`));
+}
+
+// Like tokenize, but keeps wildcards. Words made only of wildcards are dropped.
+function tokenizeQuery(text: string): QueryToken[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9À-ɏ*?]+/i)
+    .filter((t) => /[a-z0-9À-ɏ]/i.test(t))
+    .map((t) => ({ text: t, pattern: /[*?]/.test(t) ? new RegExp(`^${wildcardSource(t)}$`) : null }));
+}
+
+function tokenMatchesWord(qt: QueryToken, word: string, wholeWord: boolean): boolean {
+  if (qt.pattern) return qt.pattern.test(word);
+  return wholeWord ? word === qt.text : word.startsWith(qt.text);
 }
 
 function parseQuery(query: string): ParsedQuery {
@@ -46,7 +75,7 @@ function parseQuery(query: string): ParsedQuery {
     if (!value) continue;
 
     const isPhrase = m[1] !== undefined || m[2] !== undefined;
-    const tokens = tokenize(value);
+    const tokens = tokenizeQuery(value);
     if (tokens.length === 0) continue;
 
     terms.push({
@@ -81,32 +110,33 @@ function parseQuery(query: string): ParsedQuery {
   return { terms, orGroups };
 }
 
-function tokenMatchesAny(queryToken: string, targetTokens: string[]): boolean {
-  return targetTokens.some((t) => t.startsWith(queryToken));
+function tokenMatchesAny(queryToken: QueryToken, targetTokens: string[]): boolean {
+  return targetTokens.some((t) => tokenMatchesWord(queryToken, t, false));
 }
 
-function allTokensMatch(queryTokens: string[], targetTokens: string[]): boolean {
+function allTokensMatch(queryTokens: QueryToken[], targetTokens: string[]): boolean {
   return queryTokens.every((qt) => tokenMatchesAny(qt, targetTokens));
 }
 
-function exactMatchBonus(queryTokens: string[], targetTokens: string[]): number {
+// Wildcard words never earn the bonus: they only match whole words anyway.
+function exactMatchBonus(queryTokens: QueryToken[], targetTokens: string[]): number {
   let bonus = 0;
   for (const qt of queryTokens) {
-    if (targetTokens.some((t) => t === qt)) {
+    if (!qt.pattern && targetTokens.some((t) => t === qt.text)) {
       bonus += EXACT_TOKEN_BONUS;
     }
   }
   return bonus;
 }
 
-function phraseMatches(queryTokens: string[], targetTokens: string[]): boolean {
+function phraseMatches(queryTokens: QueryToken[], targetTokens: string[]): boolean {
   if (queryTokens.length === 0) return false;
   if (queryTokens.length > targetTokens.length) return false;
 
   for (let i = 0; i <= targetTokens.length - queryTokens.length; i++) {
     let match = true;
     for (let j = 0; j < queryTokens.length; j++) {
-      if (targetTokens[i + j] !== queryTokens[j]) {
+      if (!tokenMatchesWord(queryTokens[j], targetTokens[i + j], true)) {
         match = false;
         break;
       }
@@ -116,13 +146,13 @@ function phraseMatches(queryTokens: string[], targetTokens: string[]): boolean {
   return false;
 }
 
-function proximityScore(queryTokens: string[], targetTokens: string[]): number {
+function proximityScore(queryTokens: QueryToken[], targetTokens: string[]): number {
   if (queryTokens.length < 2) return 0;
 
   const positions: number[][] = queryTokens.map((qt) => {
     const pos: number[] = [];
     targetTokens.forEach((tt, idx) => {
-      if (tt.startsWith(qt)) pos.push(idx);
+      if (tokenMatchesWord(qt, tt, false)) pos.push(idx);
     });
     return pos;
   });
@@ -288,8 +318,23 @@ export function getHighlightRanges(text: string, query: string): Array<[number, 
   const ranges: Array<[number, number]> = [];
   const lower = text.toLowerCase();
 
+  function pushRegexMatches(regex: RegExp) {
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
+
+  // Matches the pattern only as a whole word, never part of a longer word.
+  function wholeWordRegex(source: string): RegExp {
+    return new RegExp(`(?<![${WORD_CHAR}])${source}(?![${WORD_CHAR}])`, "gi");
+  }
+
   for (const term of parsed.terms) {
-    if (term.type === "phrase") {
+    const hasWildcard = term.tokens.some((t) => t.pattern);
+    if (term.type === "phrase" && hasWildcard) {
+      pushRegexMatches(wholeWordRegex(term.tokens.map((t) => wildcardSource(t.text)).join(`[^${WORD_CHAR}]+`)));
+    } else if (term.type === "phrase") {
       let idx = 0;
       while ((idx = lower.indexOf(term.value, idx)) !== -1) {
         ranges.push([idx, idx + term.value.length]);
@@ -297,11 +342,9 @@ export function getHighlightRanges(text: string, query: string): Array<[number, 
       }
     } else {
       for (const token of term.tokens) {
-        const regex = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\w*`, "gi");
-        let match: RegExpExecArray | null;
-        while ((match = regex.exec(text)) !== null) {
-          ranges.push([match.index, match.index + match[0].length]);
-        }
+        pushRegexMatches(token.pattern
+          ? wholeWordRegex(wildcardSource(token.text))
+          : new RegExp(`\\b${token.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\w*`, "gi"));
       }
     }
   }
