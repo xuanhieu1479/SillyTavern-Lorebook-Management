@@ -144,7 +144,10 @@ export interface AppSettings {
   clipboardTemplate?: string;
   favorites?: string[];
   quickFilter?: string[];
+  appearance?: AppearancePref;
 }
+
+export type AppearancePref = "light" | "dark" | "system";
 
 export interface DataSource {
   dataDir?: string;

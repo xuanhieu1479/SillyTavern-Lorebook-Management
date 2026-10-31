@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Badge, Box, Button, Flex, ScrollArea, Text } from "@radix-ui/themes";
+import { ChevronRightIcon } from "@radix-ui/react-icons";
 import type { Category, Entry } from "./types";
 import EntryActions from "./EntryActions";
 
@@ -24,71 +26,80 @@ export default function CategoryManager({ categories, entries, highlightId, onDu
   }
 
   return (
-    <div className="category-manager">
-      <div className="cat-tree-actions">
-        <button
+    <Flex direction="column" gap="3" flexGrow="1" minHeight="0">
+      <Flex gap="2" flexShrink="0">
+        <Button
           type="button"
-          className="btn-sm"
+          size="1"
+          variant="soft"
           onClick={() => setExpanded(new Set(categories.map((c) => c.id)))}
           disabled={categories.length === 0}
         >
           Expand all
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn-sm"
+          size="1"
+          variant="soft"
           onClick={() => setExpanded(new Set())}
           disabled={expanded.size === 0}
         >
           Collapse all
-        </button>
-      </div>
-      <div className="cat-tree">
-        {categories.map((cat) => {
-          const isOpen = expanded.has(cat.id);
-          const catEntries = entries
-            .filter((e) => e.category === cat.id)
-            .sort((a, b) => a.name.localeCompare(b.name));
-          return (
-            <div key={cat.id} className="cat-node">
-              <button
-                type="button"
-                className="cat-node-header"
-                onClick={() => toggle(cat.id)}
-                aria-expanded={isOpen}
-              >
-                <span className={`cat-chevron${isOpen ? " open" : ""}`}>▶</span>
-                <span className="cat-name">{cat.name}</span>
-                <span className="cat-count">{catEntries.length}</span>
-              </button>
-              {isOpen && (
-                <div className="cat-children">
-                  {catEntries.map((entry) => (
-                    <div key={entry.id} className={`cat-entry${highlightId === entry.id ? " highlight-new" : ""}`}>
-                      <span className="cat-entry-name">
-                        {entry.name || <span className="cat-entry-empty">(unnamed)</span>}
-                      </span>
-                      <EntryActions
-                        entry={entry}
-                        categories={categories}
-                        onDuplicate={onDuplicate}
-                        onMove={onMove}
-                        onDelete={onDelete}
-                      />
-                    </div>
-                  ))}
-                  {catEntries.length === 0 && (
-                    <div className="cat-entry cat-entry-empty">No entries</div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {categories.length === 0 && (
-          <p className="empty-sm">No categories found in the worlds folder.</p>
-        )}
-      </div>
-    </div>
+        </Button>
+      </Flex>
+      <ScrollArea type="auto" scrollbars="vertical">
+        <Flex direction="column" gap="1" pr="3">
+          {categories.map((cat) => {
+            const isOpen = expanded.has(cat.id);
+            const catEntries = entries
+              .filter((e) => e.category === cat.id)
+              .sort((a, b) => a.name.localeCompare(b.name));
+            return (
+              <Flex key={cat.id} direction="column">
+                <button
+                  type="button"
+                  className="cat-node-header"
+                  onClick={() => toggle(cat.id)}
+                  aria-expanded={isOpen}
+                >
+                  <ChevronRightIcon className={`cat-chevron${isOpen ? " open" : ""}`} />
+                  <Text size="2" weight="medium" truncate className="grow">{cat.name}</Text>
+                  <Badge color="gray" variant="soft" radius="full">{catEntries.length}</Badge>
+                </button>
+                {isOpen && (
+                  <Box className="cat-children">
+                    {catEntries.map((entry) => (
+                      <Flex
+                        key={entry.id}
+                        align="center"
+                        gap="2"
+                        className={`cat-entry${highlightId === entry.id ? " highlight-new" : ""}`}
+                      >
+                        <Text size="2" truncate className="grow" color={entry.name ? undefined : "gray"}>
+                          {entry.name || <em>(unnamed)</em>}
+                        </Text>
+                        <EntryActions
+                          entry={entry}
+                          categories={categories}
+                          onDuplicate={onDuplicate}
+                          onMove={onMove}
+                          onDelete={onDelete}
+                        />
+                      </Flex>
+                    ))}
+                    {catEntries.length === 0 && (
+                      <Text as="div" size="2" color="gray" className="cat-entry"><em>No entries</em></Text>
+                    )}
+                  </Box>
+                )}
+              </Flex>
+            );
+          })}
+          {categories.length === 0 && (
+            <Text as="p" size="2" color="gray" align="center">No categories found in the worlds folder.</Text>
+          )}
+        </Flex>
+      </ScrollArea>
+    </Flex>
   );
 }

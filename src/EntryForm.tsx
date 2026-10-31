@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import { Flex, IconButton, Select, Text, TextArea, TextField, Tooltip } from "@radix-ui/themes";
+import { MixerHorizontalIcon, StarFilledIcon, StarIcon } from "@radix-ui/react-icons";
 import type { Entry, Category } from "./types";
 import { getHighlightRanges, type SearchMode } from "./search";
 
@@ -88,8 +90,41 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
     }
   };
 
-  const showHighlights = searchMode === "content" && searchQuery && editing;
-  const highlightRanges = showHighlights ? getHighlightRanges(content, searchQuery) : [];
+  const showHighlights = Boolean(searchMode === "content" && searchQuery && editing);
+  const highlightRanges = showHighlights ? getHighlightRanges(content, searchQuery!) : [];
+
+  // Line the highlight backdrop up with the text inside Radix's TextArea, whose
+  // padding, border and scrollbar width come from theme tokens.
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    const backdrop = backdropRef.current;
+    if (!showHighlights || !textarea || !backdrop) return;
+    const root = textarea.parentElement!;
+
+    function sync() {
+      const ta = getComputedStyle(textarea!);
+      const rootRect = root.getBoundingClientRect();
+      const taRect = textarea!.getBoundingClientRect();
+      const scrollbar = textarea!.offsetWidth - textarea!.clientWidth;
+      const s = backdrop!.style;
+      s.borderRadius = getComputedStyle(root).borderRadius;
+      s.paddingTop = `${taRect.top - rootRect.top + parseFloat(ta.paddingTop)}px`;
+      s.paddingBottom = `${rootRect.bottom - taRect.bottom + parseFloat(ta.paddingBottom)}px`;
+      s.paddingLeft = `${taRect.left - rootRect.left + parseFloat(ta.paddingLeft)}px`;
+      s.paddingRight = `${rootRect.right - taRect.right + parseFloat(ta.paddingRight) + scrollbar}px`;
+      s.fontFamily = ta.fontFamily;
+      s.fontSize = ta.fontSize;
+      s.fontWeight = ta.fontWeight;
+      s.lineHeight = ta.lineHeight;
+      s.letterSpacing = ta.letterSpacing;
+      backdrop!.scrollTop = textarea!.scrollTop;
+    }
+
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [showHighlights, content]);
 
   function buildHighlightedContent(): React.ReactNode[] {
     if (highlightRanges.length === 0) {
@@ -144,81 +179,82 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
 
   return (
     <form className="entry-form" ref={formRef} onSubmit={handleSubmit}>
-      {error && <div className="form-error">{error}</div>}
-      <div className="form-row">
-        <div className="form-field">
-          <label>Category</label>
-          <select
-            className={category ? "" : "placeholder"}
+      {error && <Text size="2" color="red">{error}</Text>}
+      <Flex gap="3" flexShrink="0">
+        <Flex direction="column" gap="1">
+          <Text as="label" size="2" weight="bold">Category</Text>
+          <Select.Root
             value={category}
-            onChange={(e) => { setCategory(e.target.value); setError(""); }}
-            onKeyDown={handleCtrlEnter}
+            onValueChange={(v) => { setCategory(v); setError(""); }}
           >
-            <option value="" disabled hidden>Select</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field form-field-grow">
-          <label>Name</label>
-          <input
-            type="text"
+            <Select.Trigger placeholder="Select" onKeyDown={handleCtrlEnter} />
+            <Select.Content position="popper">
+              {categories.map((c) => (
+                <Select.Item key={c.id} value={c.id}>{c.name}</Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+        <Flex direction="column" gap="1" flexGrow="1">
+          <Text as="label" size="2" weight="bold">Name</Text>
+          <TextField.Root
             value={name}
             onChange={(e) => { setName(e.target.value); setError(""); }}
             placeholder="Entry name"
           />
-        </div>
-        <div className="form-field form-field-grow">
-          <label>Keys</label>
-          <input
-            type="text"
+        </Flex>
+        <Flex direction="column" gap="1" flexGrow="1">
+          <Text as="label" size="2" weight="bold">Keys</Text>
+          <TextField.Root
             value={keysInput}
             onChange={(e) => { setKeysInput(e.target.value); setError(""); }}
             placeholder="key1, key2, key3"
           />
-        </div>
-      </div>
-      <div className="form-field form-field-grow">
-        <div className="label-with-meta">
-          <span className="label-left">
-            <label>Content</label>
+        </Flex>
+      </Flex>
+      <Flex direction="column" gap="1" flexGrow="1" minHeight="0">
+        <Flex justify="between" align="center">
+          <Flex align="center" gap="3">
+            <Text as="label" size="2" weight="bold">Content</Text>
             {editing && onToggleFavorite && (
-              <button
-                type="button"
-                className={`btn-favorite ${isFavorite ? "favorited" : ""}`}
-                onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-              </button>
+              <Tooltip content={isFavorite ? "Remove from favorites" : "Add to favorites"}>
+                <IconButton aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  type="button"
+                  size="1"
+                  variant="ghost"
+                  color={isFavorite ? "amber" : "gray"}
+                  onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                >
+                  {isFavorite ? <StarFilledIcon /> : <StarIcon />}
+                </IconButton>
+              </Tooltip>
             )}
             {editing && onToggleQuickFilter && (
-              <button
-                type="button"
-                className={`btn-quick-filter ${isQuickFilter ? "active" : ""}`}
-                onClick={(e) => { e.stopPropagation(); onToggleQuickFilter(); }}
-                title={isQuickFilter ? "Remove from quick filter" : "Add to quick filter"}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={isQuickFilter ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-                </svg>
-              </button>
+              <Tooltip content={isQuickFilter ? "Remove from quick filter" : "Add to quick filter"}>
+                <IconButton aria-label={isQuickFilter ? "Remove from quick filter" : "Add to quick filter"}
+                  type="button"
+                  size="1"
+                  variant={isQuickFilter ? "soft" : "ghost"}
+                  color={isQuickFilter ? "blue" : "gray"}
+                  onClick={(e) => { e.stopPropagation(); onToggleQuickFilter(); }}
+                >
+                  <MixerHorizontalIcon />
+                </IconButton>
+              </Tooltip>
             )}
-          </span>
-          <span className="token-count">~{Math.ceil(content.length / 4)} tokens</span>
-        </div>
+          </Flex>
+          <Text size="1" color="gray">~{Math.ceil(content.length / 4)} tokens</Text>
+        </Flex>
         <div className="textarea-highlight-container">
           {showHighlights && (
             <div className="textarea-backdrop" ref={backdropRef}>
               {buildHighlightedContent()}
             </div>
           )}
-          <textarea
+          <TextArea
             ref={textareaRef}
-            className={showHighlights ? "with-highlights" : ""}
+            className={`content-textarea${showHighlights ? " with-highlights" : ""}`}
+            size="3"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleCtrlEnter}
@@ -226,7 +262,7 @@ const EntryForm = forwardRef<EntryFormHandle, Props>(({ editing, categories, onS
             placeholder="Entry content..."
           />
         </div>
-      </div>
+      </Flex>
     </form>
   );
 });

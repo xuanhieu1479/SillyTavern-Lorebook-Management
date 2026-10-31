@@ -1,16 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import {
+  Badge, Box, Button, Card, Checkbox, Dialog, DropdownMenu, Flex, Heading, IconButton,
+  ScrollArea, SegmentedControl, Select, Separator, Text, TextField, Theme, Tooltip,
+} from "@radix-ui/themes";
+import {
+  Cross2Icon, DesktopIcon, ExternalLinkIcon, GearIcon, MagnifyingGlassIcon, MoonIcon,
+  PlusIcon, ReloadIcon, StackIcon, SunIcon,
+} from "@radix-ui/react-icons";
 import type { Entry, Category } from "./types";
 
 const MAX_TOASTS = 3;
 const toastQueue: string[] = [];
 const TOAST_COLORS = [
-  "#6366f1", // indigo
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#f59e0b", // amber
-  "#10b981", // emerald
-  "#06b6d4", // cyan
+  "var(--indigo-9)",
+  "var(--violet-9)",
+  "var(--pink-9)",
+  "var(--amber-9)",
+  "var(--grass-9)",
+  "var(--cyan-9)",
 ];
 let colorIndex = 0;
 
@@ -33,7 +41,7 @@ function showToast(message: string, type: "success" | "error") {
     toastQueue.push(id);
   }
 }
-import { saveCategoryFile, loadAllFromDisk, loadSettings, loadDataSource, saveSettings, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
+import { saveCategoryFile, loadAllFromDisk, loadSettings, loadDataSource, saveSettings, makeRawForNewEntry, cloneRawForDuplicate, type AppearancePref } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
@@ -48,6 +56,16 @@ function generateId(): string {
 }
 
 const SEARCH_DEBOUNCE_MS = 500;
+const ALL_CATEGORIES = "__all__";
+
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+function subscribeDark(onChange: () => void) {
+  darkQuery.addEventListener("change", onChange);
+  return () => darkQuery.removeEventListener("change", onChange);
+}
+function useSystemDark(): boolean {
+  return useSyncExternalStore(subscribeDark, () => darkQuery.matches);
+}
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -80,6 +98,9 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
   const [liveSelected, setLiveSelected] = useState<Set<string>>(new Set());
   const [liveCopied, setLiveCopied] = useState<Set<string>>(new Set());
+  const [appearance, setAppearance] = useState<AppearancePref>("system");
+  const systemDark = useSystemDark();
+  const resolvedAppearance = appearance === "system" ? (systemDark ? "dark" : "light") : appearance;
   const formRef = useRef<EntryFormHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const highlightTimerRef = useRef<number | null>(null);
@@ -106,14 +127,10 @@ export default function App() {
     });
   }
 
-  useEffect(() => {
-    if (!showCategories) return;
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setShowCategories(false);
-    }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [showCategories]);
+  function changeAppearance(value: AppearancePref) {
+    setAppearance(value);
+    saveSettings({ appearance: value });
+  }
 
   const loadFromDisk = useCallback(async () => {
     try {
@@ -148,6 +165,7 @@ export default function App() {
       setDataDir(dataSource.dataDir ?? "");
       setFavorites(settings.favorites ?? []);
       setQuickFilter(settings.quickFilter ?? []);
+      setAppearance(settings.appearance ?? "system");
     } catch (err) {
       console.error("Failed to load from disk:", err);
     }
@@ -222,7 +240,6 @@ export default function App() {
       )
     : [];
 
-  const hasLiveMatches = liveMatches.length > 0;
   const liveMatchIds = new Set(liveMatches.map((e) => e.id));
 
   // All disabled entries with matching keys (for display in live section)
@@ -232,7 +249,6 @@ export default function App() {
         return isDisabled && e.keys.some((key) => keyMatches(key, stTextarea));
       })
     : [];
-  const allKeyMatchIds = new Set(allKeyMatches.map((e) => e.id));
   const hasKeyMatches = allKeyMatches.length > 0;
 
   // Live section: all entries with matching keys that are NOT already in chat
@@ -377,201 +393,238 @@ export default function App() {
     });
   }
 
+  const AppearanceIcon = appearance === "light" ? SunIcon : appearance === "dark" ? MoonIcon : DesktopIcon;
+
   return (
-    <div className="app">
-      <header>
-        <div className="header-left">
-          <h1>Lorebook Management</h1>
-          {favorites.length > 0 && (
-            <div className="favorite-tags">
-              {favorites.map((fname) => {
-                const entry = entries.find((e) => e.name === fname);
-                if (!entry) return null;
-                const displayName = fname.includes("-")
-                  ? fname.split("-").pop()!.trim()
-                  : fname;
-                return (
-                  <button
-                    key={fname}
-                    className="favorite-tag"
-                    onClick={() => handleEdit(entry)}
-                    title={fname}
-                  >
-                    {displayName}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="header-actions">
-          <div
-            className={`header-btn live-btn ${liveMatches.length > 0 ? "live-active" : ""}`}
-            title={wsConnected ? `Live matches: ${liveMatches.length}` : "SillyTavern not connected"}
-          >
-            <span className={`live-dot ${wsConnected ? "connected" : ""}`} />
-            <span className="live-label">Live{liveMatches.length > 0 ? ` (${liveMatches.length})` : ""}</span>
-          </div>
-          <div className="header-divider" />
-          {!editing && (
-            <button className="header-btn header-submit" title="Add" onClick={() => formRef.current?.submit()}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14"/><path d="M5 12h14"/>
-              </svg>
-            </button>
-          )}
-          <div className="header-divider" />
-          <button className="header-btn" title="Categories" onClick={() => setShowCategories(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </button>
-          <button className="header-btn" title="Refresh" onClick={loadFromDisk}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/>
-            </svg>
-          </button>
-          <button className="header-btn" title="Settings" onClick={() => setShowSettings(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
-          <button className="header-btn" title="Open worlds folder" onClick={() => fetch("/api/open-folder", { method: "POST" })}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      <div className="main-layout">
-        <div className="left-panel">
-          <div className="filters">
-            <div className="filters-row">
-              <div className="search-input-wrapper">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search... (quotes for phrase, | for OR)"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                {search && (
-                  <button
-                    className="search-clear-btn"
-                    onClick={() => {
-                      setSearch("");
-                      setDebouncedSearch("");
-                    }}
-                    type="button"
-                    title="Clear search"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="filters-row">
-              <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <label className="search-mode-toggle">
-                <input
-                  type="checkbox"
-                  checked={searchMode === "content"}
-                  onChange={(e) => setSearchMode(e.target.checked ? "content" : "name")}
-                />
-                <span className="toggle-label">{searchMode === "name" ? "Name" : "Content"}</span>
-              </label>
-            </div>
-          </div>
-          <EntryList
-            entries={displayEntries}
-            categories={categories}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            editingId={editing?.id ?? null}
-            highlightId={highlightId}
-            onDuplicate={handleDuplicate}
-            onMove={handleMove}
-            onCopy={(content, id) => {
-              navigator.clipboard.writeText(formatClipboard(clipboardTemplate, [{ id: id || "", content }]));
-              showToast("Copied to clipboard", "success");
-            }}
-            onToggleDisabled={handleToggleDisabled}
-            quickFilter={quickFilter}
-          />
-        </div>
-
-        {/* Live matches overlay panel */}
-        {hasKeyMatches && (
-          <div className="live-panel">
-            <div className="live-panel-header">
-              <h3>Live Matches ({liveSection.length})</h3>
-              <div className="live-panel-actions">
-                <button
-                  className="btn-select"
-                  onClick={liveSelected.size > 0 ? handleLiveCopy : handleLiveSelectAll}
-                >
-                  {liveSelected.size > 0 ? `Copy (${liveSelected.size})` : "Select All"}
-                </button>
-              </div>
-            </div>
-            <div className="live-panel-list">
-              {liveSection.length === 0 ? (
-                <div className="empty">No matches</div>
-              ) : (
-                liveSection.map((entry) => {
-                  const isSelected = liveSelected.has(entry.id);
-                  const isFiltered = liveMatchIds.has(entry.id);
+    <Theme accentColor="indigo" grayColor="slate" radius="medium" appearance={resolvedAppearance}>
+      <Flex direction="column" className="app">
+        <Flex justify="between" align="center" flexShrink="0" px="4" className="app-header bordered-bottom surface">
+          <Flex align="center" gap="3" minWidth="0">
+            <Heading size="4" weight="bold" className="nowrap">Lorebook Management</Heading>
+            {favorites.length > 0 && (
+              <Flex gap="2" wrap="wrap">
+                {favorites.map((fname) => {
+                  const entry = entries.find((e) => e.name === fname);
+                  if (!entry) return null;
+                  const displayName = fname.includes("-")
+                    ? fname.split("-").pop()!.trim()
+                    : fname;
                   return (
-                    <div
-                      key={entry.id}
-                      className={`live-panel-item${isSelected ? " selected" : ""}${isFiltered ? " filtered" : ""}`}
-                      onClick={() => handleLiveToggleSelect(entry.id)}
+                    <Button
+                      key={fname}
+                      size="1"
+                      variant="soft"
+                      radius="full"
+                      className="favorite-tag"
+                      onClick={() => handleEdit(entry)}
+                      title={fname}
                     >
-                      <input
-                        type="checkbox"
-                        className="live-select-checkbox"
-                        checked={isSelected}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={() => handleLiveToggleSelect(entry.id)}
-                      />
-                      <span className="live-panel-name" title={entry.name || "(unnamed)"}>{entry.name || "(unnamed)"}</span>
-                    </div>
+                      <Text truncate>{displayName}</Text>
+                    </Button>
                   );
-                })
-              )}
-            </div>
-          </div>
-        )}
+                })}
+              </Flex>
+            )}
+          </Flex>
+          <Flex align="center" gap="3" flexShrink="0">
+            <Tooltip content={wsConnected ? `Live matches: ${liveMatches.length}` : "SillyTavern not connected"}>
+              <Badge size="2" variant="soft" color={liveMatches.length > 0 ? "indigo" : "gray"}>
+                <span className={`live-dot${wsConnected ? " connected" : ""}`} />
+                Live{liveMatches.length > 0 ? ` (${liveMatches.length})` : ""}
+              </Badge>
+            </Tooltip>
+            {!editing && (
+              <>
+                <Separator orientation="vertical" />
+                <Tooltip content="Add">
+                  <IconButton aria-label="Add" variant="soft" onClick={() => formRef.current?.submit()}>
+                    <PlusIcon />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
+            <Separator orientation="vertical" />
+            <Tooltip content="Categories">
+              <IconButton aria-label="Categories" variant="ghost" color="gray" onClick={() => setShowCategories(true)}>
+                <StackIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip content="Refresh">
+              <IconButton aria-label="Refresh" variant="ghost" color="gray" onClick={loadFromDisk}>
+                <ReloadIcon />
+              </IconButton>
+            </Tooltip>
+            <DropdownMenu.Root>
+              {/* Plain title: a Tooltip would overwrite the trigger's open data-state */}
+              <DropdownMenu.Trigger>
+                <IconButton aria-label="Theme" title="Theme" variant="ghost" color="gray">
+                  <AppearanceIcon />
+                </IconButton>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end">
+                <DropdownMenu.RadioGroup value={appearance} onValueChange={(v) => changeAppearance(v as AppearancePref)}>
+                  <DropdownMenu.RadioItem value="light"><SunIcon /> Light</DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="dark"><MoonIcon /> Dark</DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="system"><DesktopIcon /> System</DropdownMenu.RadioItem>
+                </DropdownMenu.RadioGroup>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+            <Tooltip content="Settings">
+              <IconButton aria-label="Settings" variant="ghost" color="gray" onClick={() => setShowSettings(true)}>
+                <GearIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip content="Open worlds folder">
+              <IconButton aria-label="Open worlds folder" variant="ghost" color="gray" onClick={() => fetch("/api/open-folder", { method: "POST" })}>
+                <ExternalLinkIcon />
+              </IconButton>
+            </Tooltip>
+          </Flex>
+        </Flex>
 
-        <div className="right-panel">
-          <EntryForm
-            ref={formRef}
-            editing={editing}
-            categories={categories}
-            onSave={handleSave}
-            onCancel={() => setEditing(null)}
-            isFavorite={editing ? favorites.includes(editing.name) : false}
-            onToggleFavorite={editing ? () => toggleFavorite(editing.name) : undefined}
-            isQuickFilter={editing ? quickFilter.includes(editing.id) : false}
-            onToggleQuickFilter={editing ? () => toggleQuickFilter(editing.id) : undefined}
-            searchQuery={debouncedSearch}
-            searchMode={searchMode}
-          />
-        </div>
+        <Flex className="main-layout">
+          <Flex direction="column" className="left-panel">
+            <Flex direction="column" gap="2" flexShrink="0" px="3" py="3" className="bordered-bottom surface">
+              <TextField.Root
+                ref={searchInputRef}
+                placeholder="Search... (quotes for phrase, | for OR)"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              >
+                <TextField.Slot>
+                  <MagnifyingGlassIcon />
+                </TextField.Slot>
+                {search && (
+                  <TextField.Slot>
+                    <IconButton
+                      type="button"
+                      size="1"
+                      variant="ghost"
+                      color="gray"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setSearch("");
+                        setDebouncedSearch("");
+                      }}
+                    >
+                      <Cross2Icon />
+                    </IconButton>
+                  </TextField.Slot>
+                )}
+              </TextField.Root>
+              <Flex gap="2">
+                <Box flexGrow="1" minWidth="0">
+                  <Select.Root
+                    value={filterCat || ALL_CATEGORIES}
+                    onValueChange={(v) => setFilterCat(v === ALL_CATEGORIES ? "" : v)}
+                  >
+                    <Select.Trigger className="full-width" />
+                    <Select.Content position="popper">
+                      <Select.Item value={ALL_CATEGORIES}>All categories</Select.Item>
+                      {categories.map((c) => (
+                        <Select.Item key={c.id} value={c.id}>{c.name}</Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                </Box>
+                <SegmentedControl.Root value={searchMode} onValueChange={(v) => setSearchMode(v as SearchMode)}>
+                  <SegmentedControl.Item value="name">Name</SegmentedControl.Item>
+                  <SegmentedControl.Item value="content">Content</SegmentedControl.Item>
+                </SegmentedControl.Root>
+              </Flex>
+            </Flex>
+            <EntryList
+              entries={displayEntries}
+              categories={categories}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              editingId={editing?.id ?? null}
+              highlightId={highlightId}
+              onDuplicate={handleDuplicate}
+              onMove={handleMove}
+              onCopy={(content, id) => {
+                navigator.clipboard.writeText(formatClipboard(clipboardTemplate, [{ id: id || "", content }]));
+                showToast("Copied to clipboard", "success");
+              }}
+              onToggleDisabled={handleToggleDisabled}
+              quickFilter={quickFilter}
+            />
+          </Flex>
 
-      </div>
+          {/* Live matches overlay panel */}
+          {hasKeyMatches && (
+            <Card size="2" className="live-panel">
+              <Flex direction="column" gap="3" height="100%">
+                <Flex direction="column" gap="2" flexShrink="0">
+                  <Heading size="3">Live Matches ({liveSection.length})</Heading>
+                  <Box>
+                    <Button
+                      size="1"
+                      onClick={liveSelected.size > 0 ? handleLiveCopy : handleLiveSelectAll}
+                    >
+                      {liveSelected.size > 0 ? `Copy (${liveSelected.size})` : "Select All"}
+                    </Button>
+                  </Box>
+                </Flex>
+                <ScrollArea type="auto" scrollbars="vertical">
+                  <Flex direction="column" gap="1" pr="3">
+                    {liveSection.length === 0 ? (
+                      <Text as="p" size="2" color="gray" align="center" my="6">No matches</Text>
+                    ) : (
+                      liveSection.map((entry) => {
+                        const isSelected = liveSelected.has(entry.id);
+                        const isFiltered = liveMatchIds.has(entry.id);
+                        return (
+                          <Flex
+                            key={entry.id}
+                            align="center"
+                            gap="2"
+                            px="3"
+                            py="2"
+                            className="live-panel-item"
+                            data-selected={isSelected || undefined}
+                            data-filtered={isFiltered || undefined}
+                            onClick={() => handleLiveToggleSelect(entry.id)}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              onClick={(e) => e.stopPropagation()}
+                              onCheckedChange={() => handleLiveToggleSelect(entry.id)}
+                            />
+                            <Text size="2" truncate title={entry.name || "(unnamed)"}>{entry.name || "(unnamed)"}</Text>
+                          </Flex>
+                        );
+                      })
+                    )}
+                  </Flex>
+                </ScrollArea>
+              </Flex>
+            </Card>
+          )}
 
-      {showCategories && (
-        <div className="modal-backdrop" onClick={() => setShowCategories(false)}>
-          <div className="modal categories-modal" onClick={(e) => e.stopPropagation()}>
+          <Flex direction="column" className="right-panel">
+            <EntryForm
+              ref={formRef}
+              editing={editing}
+              categories={categories}
+              onSave={handleSave}
+              onCancel={() => setEditing(null)}
+              isFavorite={editing ? favorites.includes(editing.name) : false}
+              onToggleFavorite={editing ? () => toggleFavorite(editing.name) : undefined}
+              isQuickFilter={editing ? quickFilter.includes(editing.id) : false}
+              onToggleQuickFilter={editing ? () => toggleQuickFilter(editing.id) : undefined}
+              searchQuery={debouncedSearch}
+              searchMode={searchMode}
+            />
+          </Flex>
+        </Flex>
+
+        <Dialog.Root open={showCategories} onOpenChange={setShowCategories}>
+          <Dialog.Content maxWidth="75vw" height="80vh" className="dialog-fill">
+            <Dialog.Title>Categories</Dialog.Title>
+            <Dialog.Description size="2" color="gray" mb="3">
+              Browse every lorebook file and its entries.
+            </Dialog.Description>
             <CategoryManager
               categories={categories}
               entries={entries}
@@ -580,45 +633,50 @@ export default function App() {
               onMove={handleMove}
               onDelete={handleDelete}
             />
-            <div className="modal-actions">
-              <button onClick={() => setShowCategories(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
+            <Flex justify="end" mt="4" flexShrink="0">
+              <Dialog.Close>
+                <Button variant="soft" color="gray">Close</Button>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
 
-      {showSettings && (
-        <SettingsModal
-          clipboardTemplate={clipboardTemplate}
-          dataDir={dataDir}
-          favorites={favorites}
-          onSave={({ clipboardTemplate: ct, dataDir: dd, favorites: favs }) => {
-            setClipboardTemplate(ct);
-            setDataDir(dd);
-            setFavorites(favs);
+        {showSettings && (
+          <SettingsModal
+            clipboardTemplate={clipboardTemplate}
+            dataDir={dataDir}
+            favorites={favorites}
+            onSave={({ clipboardTemplate: ct, dataDir: dd, favorites: favs }) => {
+              setClipboardTemplate(ct);
+              setDataDir(dd);
+              setFavorites(favs);
+            }}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 2000,
+            style: {
+              background: "var(--color-panel-solid)",
+              color: "var(--gray-12)",
+              border: "1px solid var(--gray-a6)",
+              boxShadow: "var(--shadow-4)",
+              fontFamily: "var(--default-font-family)",
+              fontSize: "var(--font-size-2)",
+            },
+            success: {
+              iconTheme: { primary: "var(--accent-9)", secondary: "white" },
+            },
+            error: {
+              iconTheme: { primary: "var(--red-9)", secondary: "white" },
+            },
           }}
-          onClose={() => setShowSettings(false)}
+          containerStyle={{ top: 20 }}
         />
-      )}
-
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          duration: 2000,
-          style: {
-            background: "var(--surface)",
-            color: "var(--text-h)",
-            border: "1px solid var(--border)",
-          },
-          success: {
-            iconTheme: { primary: "var(--accent)", secondary: "white" },
-          },
-          error: {
-            iconTheme: { primary: "var(--danger)", secondary: "white" },
-          },
-        }}
-        containerStyle={{ top: 20 }}
-      />
-    </div>
+      </Flex>
+    </Theme>
   );
 }

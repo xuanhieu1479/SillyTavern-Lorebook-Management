@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Badge, Box, Button, Card, Flex, Switch, Text } from "@radix-ui/themes";
 import type { Entry, Category } from "./types";
 import EntryActions from "./EntryActions";
 
@@ -30,73 +31,79 @@ export default function EntryList({ entries, categories, onEdit, onDelete, editi
   }, [safePage]);
 
   if (entries.length === 0) {
-    return <p className="empty">No entries found.</p>;
+    return (
+      <Text as="p" align="center" color="gray" size="2" my="9">
+        No entries found.
+      </Text>
+    );
   }
 
   return (
-    <div className="entry-list-wrapper">
-      <div className="list-header">
-        <span className="entry-count">{entries.length} entries</span>
+    <Flex direction="column" flexGrow="1" minHeight="0">
+      <Flex justify="between" align="center" flexShrink="0" px="3" py="2" className="bordered-bottom">
+        <Text size="1" color="gray">{entries.length} entries</Text>
         {totalPages > 1 && (
-          <div className="pagination">
-            <button className="btn-sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>Prev</button>
-            <span>{safePage + 1} / {totalPages}</span>
-            <button className="btn-sm" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>Next</button>
-          </div>
+          <Flex align="center" gap="2">
+            <Button size="1" variant="soft" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>Prev</Button>
+            <Text size="1" color="gray">{safePage + 1} / {totalPages}</Text>
+            <Button size="1" variant="soft" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>Next</Button>
+          </Flex>
         )}
-      </div>
-      <div className="entry-list" ref={listRef}>
+      </Flex>
+      <Flex direction="column" gap="2" px="3" py="2" flexGrow="1" minHeight="0" overflowY="auto" ref={listRef}>
         {paged.map((entry) => {
           const isDisabled = Boolean((entry.extra?._raw as Record<string, unknown> | undefined)?.disable);
           const isQuickFiltered = quickFilter.includes(entry.id);
 
           return (
-            <div
+            <Card
               key={entry.id}
-              className={`entry-card${editingId === entry.id ? " selected" : ""}${highlightId === entry.id ? " highlight-new" : ""}${isDisabled ? " entry-disabled" : ""}${isQuickFiltered ? " quick-filtered" : ""}`}
+              size="1"
+              className={`entry-card${highlightId === entry.id ? " highlight-new" : ""}`}
+              data-selected={editingId === entry.id || undefined}
+              data-disabled={isDisabled || undefined}
+              data-quick-filtered={isQuickFiltered || undefined}
               onClick={() => onEdit(entry)}
             >
-              <div className="entry-card-header">
-                <div className="entry-card-name">{entry.name}</div>
-                <button
-                  className={`entry-toggle${isDisabled ? "" : " active"}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleDisabled(entry.id);
-                  }}
-                  title={isDisabled ? "Enable entry" : "Disable entry"}
-                >
-                  <span className="toggle-track">
-                    <span className="toggle-thumb" />
-                  </span>
-                </button>
-              </div>
-              <div className="entry-card-row">
-                <div
-                  className="entry-keys"
-                  title={entry.keys.length > 2 ? entry.keys.join(", ") : undefined}
-                >
-                  {entry.keys.slice(0, 2).map((k, i) => (
-                    <span key={i} className="key-tag">{k}</span>
-                  ))}
-                  {entry.keys.length > 2 && (
-                    <span className="key-tag key-more">+{entry.keys.length - 2}</span>
-                  )}
-                </div>
-                <EntryActions
-                  entry={entry}
-                  categories={categories}
-                  onCopy={onCopy}
-                  onEdit={() => onEdit(entry)}
-                  onDuplicate={onDuplicate}
-                  onMove={onMove}
-                  onDelete={onDelete}
-                />
-              </div>
-            </div>
+              <Flex direction="column" gap="2">
+                <Flex align="center" gap="2">
+                  <Text size="2" weight="bold" truncate className="grow">{entry.name}</Text>
+                  {/* Plain title: a Tooltip trigger would overwrite the switch's data-state */}
+                  <Switch
+                    size="1"
+                    title={isDisabled ? "Enable entry" : "Disable entry"}
+                    aria-label={isDisabled ? "Enable entry" : "Disable entry"}
+                    checked={!isDisabled}
+                    onClick={(e) => e.stopPropagation()}
+                    onCheckedChange={() => onToggleDisabled(entry.id)}
+                  />
+                </Flex>
+                <Flex align="end" gap="2">
+                  <Box className="grow" minWidth="0" title={entry.keys.length > 2 ? entry.keys.join(", ") : undefined}>
+                    <Flex wrap="wrap" gap="1">
+                      {entry.keys.slice(0, 2).map((k, i) => (
+                        <Badge key={i} variant="soft" radius="full">{k}</Badge>
+                      ))}
+                      {entry.keys.length > 2 && (
+                        <Badge color="gray" variant="soft" radius="full">+{entry.keys.length - 2}</Badge>
+                      )}
+                    </Flex>
+                  </Box>
+                  <EntryActions
+                    entry={entry}
+                    categories={categories}
+                    onCopy={onCopy}
+                    onEdit={() => onEdit(entry)}
+                    onDuplicate={onDuplicate}
+                    onMove={onMove}
+                    onDelete={onDelete}
+                  />
+                </Flex>
+              </Flex>
+            </Card>
           );
         })}
-      </div>
-    </div>
+      </Flex>
+    </Flex>
   );
 }
