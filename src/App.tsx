@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import {
-  Badge, Box, Button, Card, Checkbox, Dialog, DropdownMenu, Flex, Heading, IconButton,
+  Badge, Box, Button, Card, Checkbox, Dialog, Flex, Heading, IconButton,
   ScrollArea, Select, Separator, Switch, Text, Theme, Tooltip,
 } from "@radix-ui/themes";
 import {
-  DesktopIcon, ExternalLinkIcon, GearIcon, MoonIcon,
-  PlusIcon, ReloadIcon, StackIcon, SunIcon,
+  Cross2Icon, ExternalLinkIcon, GearIcon,
+  PlusIcon, ReloadIcon, StackIcon,
 } from "@radix-ui/react-icons";
 import type { Entry, Category } from "./types";
 
@@ -41,7 +41,7 @@ function showToast(message: string, type: "success" | "error") {
     toastQueue.push(id);
   }
 }
-import { saveCategoryFile, loadAllFromDisk, loadSettings, loadDataSource, saveSettings, makeRawForNewEntry, cloneRawForDuplicate, type AppearancePref } from "./api";
+import { saveCategoryFile, loadAllFromDisk, loadSettings, loadDataSource, saveSettings, makeRawForNewEntry, cloneRawForDuplicate } from "./api";
 import EntryForm from "./EntryForm";
 import type { EntryFormHandle } from "./EntryForm";
 import EntryList from "./EntryList";
@@ -98,9 +98,8 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
   const [liveSelected, setLiveSelected] = useState<Set<string>>(new Set());
   const [liveCopied, setLiveCopied] = useState<Set<string>>(new Set());
-  const [appearance, setAppearance] = useState<AppearancePref>("system");
+  const [livePanelOpen, setLivePanelOpen] = useState(true);
   const systemDark = useSystemDark();
-  const resolvedAppearance = appearance === "system" ? (systemDark ? "dark" : "light") : appearance;
   const formRef = useRef<EntryFormHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const highlightTimerRef = useRef<number | null>(null);
@@ -125,11 +124,6 @@ export default function App() {
       saveSettings({ quickFilter: next });
       return next;
     });
-  }
-
-  function changeAppearance(value: AppearancePref) {
-    setAppearance(value);
-    saveSettings({ appearance: value });
   }
 
   const loadFromDisk = useCallback(async () => {
@@ -166,7 +160,6 @@ export default function App() {
       setDataDir(dataSource.dataDir ?? "");
       setFavorites(settings.favorites ?? []);
       setQuickFilter(settings.quickFilter ?? []);
-      setAppearance(settings.appearance ?? "system");
     } catch (err) {
       console.error("Failed to load from disk:", err);
     }
@@ -401,10 +394,8 @@ export default function App() {
     });
   }
 
-  const AppearanceIcon = appearance === "light" ? SunIcon : appearance === "dark" ? MoonIcon : DesktopIcon;
-
   return (
-    <Theme accentColor="indigo" grayColor="slate" radius="medium" appearance={resolvedAppearance}>
+    <Theme accentColor="indigo" grayColor="slate" radius="medium" appearance={systemDark ? "dark" : "light"}>
       <Flex direction="column" className="app">
         <Flex justify="between" align="center" flexShrink="0" px="4" className="app-header bordered-bottom surface">
           <Flex align="center" gap="3" minWidth="0">
@@ -435,8 +426,14 @@ export default function App() {
             )}
           </Flex>
           <Flex align="center" gap="3" flexShrink="0">
-            <Tooltip content={wsConnected ? `Live matches: ${liveMatches.length}` : "SillyTavern not connected"}>
-              <Badge size="2" variant="soft" color={liveMatches.length > 0 ? "indigo" : "gray"}>
+            <Tooltip content={wsConnected ? `Live matches: ${liveMatches.length}${hasKeyMatches && !livePanelOpen ? " (click to show)" : ""}` : "SillyTavern not connected"}>
+              <Badge
+                size="2"
+                variant="soft"
+                color={liveMatches.length > 0 ? "indigo" : "gray"}
+                className={hasKeyMatches && !livePanelOpen ? "clickable" : undefined}
+                onClick={hasKeyMatches && !livePanelOpen ? () => setLivePanelOpen(true) : undefined}
+              >
                 <span className={`live-dot${wsConnected ? " connected" : ""}`} />
                 Live{liveMatches.length > 0 ? ` (${liveMatches.length})` : ""}
               </Badge>
@@ -462,21 +459,6 @@ export default function App() {
                 <ReloadIcon />
               </IconButton>
             </Tooltip>
-            <DropdownMenu.Root>
-              {/* Plain title: a Tooltip would overwrite the trigger's open data-state */}
-              <DropdownMenu.Trigger>
-                <IconButton aria-label="Theme" title="Theme" variant="ghost" color="gray">
-                  <AppearanceIcon />
-                </IconButton>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content align="end">
-                <DropdownMenu.RadioGroup value={appearance} onValueChange={(v) => changeAppearance(v as AppearancePref)}>
-                  <DropdownMenu.RadioItem value="light"><SunIcon /> Light</DropdownMenu.RadioItem>
-                  <DropdownMenu.RadioItem value="dark"><MoonIcon /> Dark</DropdownMenu.RadioItem>
-                  <DropdownMenu.RadioItem value="system"><DesktopIcon /> System</DropdownMenu.RadioItem>
-                </DropdownMenu.RadioGroup>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
             <Tooltip content="Settings">
               <IconButton aria-label="Settings" variant="ghost" color="gray" onClick={() => setShowSettings(true)}>
                 <GearIcon />
@@ -540,11 +522,18 @@ export default function App() {
           </Flex>
 
           {/* Live matches overlay panel */}
-          {hasKeyMatches && (
+          {hasKeyMatches && livePanelOpen && (
             <Card size="2" className="live-panel">
               <Flex direction="column" gap="3" height="100%">
                 <Flex direction="column" gap="2" flexShrink="0">
-                  <Heading size="3">Live Matches ({liveSection.length})</Heading>
+                  <Flex justify="between" align="center">
+                    <Heading size="3">Live Matches ({liveSection.length})</Heading>
+                    <Tooltip content="Close">
+                      <IconButton aria-label="Close" size="1" variant="ghost" color="gray" onClick={() => setLivePanelOpen(false)}>
+                        <Cross2Icon />
+                      </IconButton>
+                    </Tooltip>
+                  </Flex>
                   <Box>
                     <Button
                       size="1"

@@ -279,6 +279,11 @@
 }
 
 /* Live panel overlay */
+/* Live badge reopens the live panel after it has been closed. */
+.clickable {
+  cursor: pointer;
+}
+
 .live-panel {
   position: fixed;
   top: var(--header-height);
