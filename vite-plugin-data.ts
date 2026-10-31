@@ -45,6 +45,13 @@ function listWorldFiles(dir: string): string[] {
   return fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "settings.json" && f !== "dataSource.json");
 }
 
+// World files minus the ones unchecked under Settings > Data > Track entries.
+function listTrackedWorldFiles(dir: string): string[] {
+  const settings = readSettings();
+  const untracked = new Set(Array.isArray(settings.untrackedFiles) ? (settings.untrackedFiles as string[]) : []);
+  return listWorldFiles(dir).filter((f) => !untracked.has(f));
+}
+
 function formatTimestamp(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
@@ -174,7 +181,7 @@ export default function dataPlugin(): Plugin {
       // Load all entries from disk
       function loadAllEntries(): Array<{ id: string; keys: string[]; content: string; disable: boolean }> {
         const dataDir = getDataDir();
-        const files = listWorldFiles(dataDir);
+        const files = listTrackedWorldFiles(dataDir);
         const entries: Array<{ id: string; keys: string[]; content: string; disable: boolean }> = [];
 
         for (const f of files) {
@@ -359,7 +366,7 @@ export default function dataPlugin(): Plugin {
         }
         try {
           const dataDir = getDataDir();
-          const files = listWorldFiles(dataDir);
+          const files = listTrackedWorldFiles(dataDir);
           const result = files.map((f) => {
             const raw = fs.readFileSync(path.join(dataDir, f), "utf-8");
             const data = JSON.parse(raw) as Record<string, unknown>;
@@ -372,6 +379,23 @@ export default function dataPlugin(): Plugin {
           });
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify(result));
+        } catch (err) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      });
+
+      // List lorebook .json files in the configured worlds directory.
+      server.middlewares.use("/api/list-world-files", (req, res) => {
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        try {
+          const files = listWorldFiles(getDataDir()).sort();
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(files));
         } catch (err) {
           res.statusCode = 500;
           res.end(JSON.stringify({ error: String(err) }));

@@ -145,6 +145,8 @@ export interface AppSettings {
   favorites?: string[];
   quickFilter?: string[];
   appearance?: AppearancePref;
+  // Lorebook files the user unchecked under "Track entries". Files not listed are tracked.
+  untrackedFiles?: string[];
 }
 
 export type AppearancePref = "light" | "dark" | "system";
@@ -166,6 +168,11 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(merged, null, 2),
   });
+}
+
+export async function listWorldFiles(): Promise<string[]> {
+  const res = await fetch("/api/list-world-files");
+  return res.json();
 }
 
 export async function loadDataSource(): Promise<DataSource> {

@@ -624,10 +624,11 @@ export default function App() {
             clipboardTemplate={clipboardTemplate}
             dataDir={dataDir}
             favorites={favorites}
-            onSave={({ clipboardTemplate: ct, dataDir: dd, favorites: favs }) => {
+            onSave={({ clipboardTemplate: ct, dataDir: dd, favorites: favs, trackingChanged }) => {
               setClipboardTemplate(ct);
               setDataDir(dd);
               setFavorites(favs);
+              if (trackingChanged) loadFromDisk();
             }}
             onClose={() => setShowSettings(false)}
           />
