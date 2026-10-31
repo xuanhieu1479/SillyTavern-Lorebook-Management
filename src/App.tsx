@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "
 import toast, { Toaster } from "react-hot-toast";
 import {
   Badge, Box, Button, Card, Checkbox, Dialog, DropdownMenu, Flex, Heading, IconButton,
-  ScrollArea, SegmentedControl, Select, Separator, Text, TextField, Theme, Tooltip,
+  ScrollArea, Select, Separator, Switch, Text, TextField, Theme, Tooltip,
 } from "@radix-ui/themes";
 import {
   Cross2Icon, DesktopIcon, ExternalLinkIcon, GearIcon, MagnifyingGlassIcon, MoonIcon,
@@ -527,10 +527,15 @@ export default function App() {
                     </Select.Content>
                   </Select.Root>
                 </Box>
-                <SegmentedControl.Root value={searchMode} onValueChange={(v) => setSearchMode(v as SearchMode)}>
-                  <SegmentedControl.Item value="name">Name</SegmentedControl.Item>
-                  <SegmentedControl.Item value="content">Content</SegmentedControl.Item>
-                </SegmentedControl.Root>
+                <Text as="label" size="2">
+                  <Flex gap="2" align="center" height="100%" className="nowrap">
+                    <Switch
+                      checked={searchMode === "content"}
+                      onCheckedChange={(checked) => setSearchMode(checked ? "content" : "name")}
+                    />
+                    Search content
+                  </Flex>
+                </Text>
               </Flex>
             </Flex>
             <EntryList

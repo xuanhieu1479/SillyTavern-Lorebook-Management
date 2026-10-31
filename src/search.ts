@@ -16,6 +16,7 @@ interface ParsedQuery {
 
 const FIELD_WEIGHTS = {
   name: 100,
+  keys: 60,
   content: 10,
 };
 
@@ -176,10 +177,22 @@ function scoreTermInField(term: ParsedTerm, fieldTokens: string[], fieldWeight: 
   return { matched: false, isPhrase: false, score: 0 };
 }
 
-function scoreTermInEntry(term: ParsedTerm, nameTokens: string[], contentTokens: string[], mode: SearchMode): number {
+function scoreTermInEntry(
+  term: ParsedTerm,
+  nameTokens: string[],
+  keyTokens: string[][],
+  contentTokens: string[],
+  mode: SearchMode,
+): number {
   if (mode === "name") {
+    let best = 0;
     const nameMatch = scoreTermInField(term, nameTokens, FIELD_WEIGHTS.name);
-    if (nameMatch.matched) return nameMatch.score;
+    if (nameMatch.matched) best = nameMatch.score;
+    for (const tokens of keyTokens) {
+      const keyMatch = scoreTermInField(term, tokens, FIELD_WEIGHTS.keys);
+      if (keyMatch.matched) best = Math.max(best, keyMatch.score);
+    }
+    return best;
   } else {
     const contentMatch = scoreTermInField(term, contentTokens, FIELD_WEIGHTS.content);
     if (contentMatch.matched) return contentMatch.score;
@@ -192,6 +205,7 @@ function scoreEntry(entry: Entry, query: ParsedQuery, mode: SearchMode): number 
   if (query.orGroups.length === 0) return 0;
 
   const nameTokens = tokenize(entry.name);
+  const keyTokens = entry.keys.map(tokenize);
   const contentTokens = tokenize(entry.content);
 
   let totalScore = 0;
@@ -201,7 +215,7 @@ function scoreEntry(entry: Entry, query: ParsedQuery, mode: SearchMode): number 
     let bestGroupScore = 0;
 
     for (const term of group) {
-      const termScore = scoreTermInEntry(term, nameTokens, contentTokens, mode);
+      const termScore = scoreTermInEntry(term, nameTokens, keyTokens, contentTokens, mode);
       if (termScore > 0) {
         groupMatched = true;
         bestGroupScore = Math.max(bestGroupScore, termScore);
