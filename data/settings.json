@@ -135,5 +135,15 @@
     "Collected Tech:35",
     "Local Support Cast:73"
   ],
-  "copied": []
+  "copied": [],
+  "untrackedFiles": [
+    "System Framework.json",
+    "Overlord.json",
+    "Main World.json",
+    "Legacy Lore.json",
+    "General Info.json",
+    "Fate.json",
+    "Eldoria.json",
+    "Destiny.json"
+  ]
 }
