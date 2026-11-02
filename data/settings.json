@@ -133,7 +133,8 @@
     "World Canon:2",
     "Collected Tech:35",
     "Local Support Cast:73",
-    "Local Main Cast:3"
+    "Local Main Cast:3",
+    "Local Main Cast:114"
   ],
   "copied": [],
   "untrackedFiles": [
@@ -141,7 +142,6 @@
     "Overlord.json",
     "Main World.json",
     "Legacy Lore.json",
-    "General Info.json",
     "Fate.json",
     "Eldoria.json",
     "Destiny.json"
