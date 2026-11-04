@@ -223,10 +223,12 @@ export default function App() {
 
   // Memoized so unrelated re-renders (e.g. each keystroke in the search box)
   // don't re-run key regexes and searches over every entry.
-  // Primary and secondary keys are treated alike: any single match counts.
+  // An entry needs a primary key match and, if it has secondary keys, a secondary key match too.
   const keyMatchedEntries = useMemo(
     () => (stTextarea
-      ? entries.filter((e) => [...e.keys, ...e.secondaryKeys].some((key) => keyMatches(key, stTextarea)))
+      ? entries.filter((e) =>
+          e.keys.some((key) => keyMatches(key, stTextarea)) &&
+          (e.secondaryKeys.length === 0 || e.secondaryKeys.some((key) => keyMatches(key, stTextarea))))
       : []),
     [entries, stTextarea],
   );

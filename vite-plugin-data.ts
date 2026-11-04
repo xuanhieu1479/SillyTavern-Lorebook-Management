@@ -179,10 +179,10 @@ export default function dataPlugin(): Plugin {
       }
 
       // Load all entries from disk
-      function loadAllEntries(): Array<{ id: string; keys: string[]; content: string; disable: boolean }> {
+      function loadAllEntries(): Array<{ id: string; keys: string[]; secondaryKeys: string[]; content: string; disable: boolean }> {
         const dataDir = getDataDir();
         const files = listTrackedWorldFiles(dataDir);
-        const entries: Array<{ id: string; keys: string[]; content: string; disable: boolean }> = [];
+        const entries: Array<{ id: string; keys: string[]; secondaryKeys: string[]; content: string; disable: boolean }> = [];
 
         for (const f of files) {
           try {
@@ -194,14 +194,15 @@ export default function dataPlugin(): Plugin {
             for (const [, v] of Object.entries(fileEntries)) {
               const entry = v as Record<string, unknown>;
               const uid = entry.uid ?? 0;
-              // Primary and secondary keys are matched alike: any single match counts.
-              const keys = [...((entry.key as string[]) ?? []), ...((entry.keysecondary as string[]) ?? [])];
+              const keys = (entry.key as string[]) ?? [];
+              const secondaryKeys = (entry.keysecondary as string[]) ?? [];
               const content = (entry.content as string) ?? "";
               const disable = Boolean(entry.disable);
 
               entries.push({
                 id: `${fileName}:${uid}`,
                 keys,
+                secondaryKeys,
                 content,
                 disable,
               });
@@ -223,10 +224,12 @@ export default function dataPlugin(): Plugin {
 
         const allEntries = loadAllEntries();
 
-        // Find disabled entries with matching keys that are in quickFilter and NOT in chat
+        // Find disabled entries with matching keys that are in quickFilter and NOT in chat.
+        // An entry needs a primary key match and, if it has secondary keys, a secondary key match too.
         const availableEntries = allEntries.filter((e) => {
           return e.disable &&
             e.keys.some((key) => keyMatches(key, textareaContent)) &&
+            (e.secondaryKeys.length === 0 || e.secondaryKeys.some((key) => keyMatches(key, textareaContent))) &&
             quickFilter.includes(e.id) &&
             !chatIds.has(e.id);
         });
