@@ -134,13 +134,19 @@
     "Collected Tech:35",
     "Local Support Cast:73",
     "Local Main Cast:3",
-    "Local Main Cast:114"
+    "Local Main Cast:114",
+    "ReZero:39",
+    "ReZero:10",
+    "ReZero:38",
+    "ReZero:27",
+    "ReZero:0",
+    "ReZero Locations:20",
+    "ReZero Locations:21"
   ],
   "copied": [],
   "untrackedFiles": [
     "System Framework.json",
     "Overlord.json",
-    "Main World.json",
     "Legacy Lore.json",
     "Fate.json",
     "Eldoria.json",
